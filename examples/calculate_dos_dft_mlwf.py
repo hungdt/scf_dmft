@@ -24,7 +24,7 @@ broadening = 0.02
 magnetic_field = 0.
 nthreads = 8
 
-rham_file = "lto_rham.py"  # the file for the Hamiltonian produced by DFT+MLWF
+rham_file = "LaTiO3_tilted_t2g_only/lto_rham.py"  # the file for the Hamiltonian produced by DFT+MLWF
 
 HR, R = init.getHamiltonian(rham_file, 4)
 NORB  = size(HR, 1)
