@@ -8,6 +8,6 @@ EIGEN = $(HOME)/apps/include/eigen
 NUMPY = /rwthfs/rz/SW/UTIL.common/Python/2.7.5/x86_64/extra/lib/python2.7/site-packages/numpy/core/include
 MYINC = ../include
 
-DIRS = cppext fort_rot integrate_dft_mlwf integrate_tight_binding
+DIRS = cppext fort_rot integrate_dft_mlwf integrate_tight_binding integrate_bethe_lattice
 
 LAPACK = -L/usr/lib64/atlas -llapack -lf77blas -lcblas -latlas

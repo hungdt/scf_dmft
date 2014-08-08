@@ -9,6 +9,8 @@ from numpy import *
 from share_fun import grule
 from functions import rotate_all
 
+nflavors = 3
+
 nbin = 500
 emin = -6.
 emax = 6.
@@ -22,12 +24,12 @@ numk = 100
 bp, wf = grule(numk)        # the Gaussian points and weights
 
 w = linspace(emin, emax, nbin) + 1j*broadening
-self_energy = zeros((nbin, 1, 3, 3), dtype = complex)
+self_energy = zeros((nbin, 1, nflavors, nflavors), dtype = complex)
 self_energy = array([s.flatten() for s in self_energy], dtype = complex)
 tight_binding_parameters = array([1.,0.3])
 
 Gavg = calc_Gavg(w, double_counting, mu, self_energy, tight_binding_parameters, 
-                 magnetic_field, bp, wf, 0).reshape(nbin, 3, 3)
-G = rotate_all(Gavg, [matrix(eye(3))])
+                 magnetic_field, bp, wf, 0).reshape(nbin, nflavors, nflavors)
+G = rotate_all(Gavg, [matrix(eye(nflavors))])
 dos = -1/pi*G.imag
 savetxt('dos_tight_binding.out', c_[w.real, dos], fmt='%.6f')
