@@ -2,12 +2,14 @@ import os;
 
 src_dir = os.path.dirname(os.path.abspath(__file__));
 
+# the path for the "mpirun" command (for MPI parallel running
+mpirun = "$MPIEXEC -x PYTHONPATH";
+
 # this is for the interface with the private CT-HYB solver 
 # from Philipp Werner and Emanuel Gull
 LatticeLibrary = '"/home/hungdt/works1/share/lattices.xml"';
 ModelLibrary = '"/home/hungdt/works1/share/models.xml"';
 Model = '"hung_multiorbital"';
-mpirun = "$MPIEXEC -x PYTHONPATH";
 parm2xml = "parameter2xml";
 solver_matrix = "/home/hungdt/works/code/DMFT/Matrix/MPI_dca";
 
