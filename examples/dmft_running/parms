@@ -1,0 +1,42 @@
+ID = u4.3j0.65b10;                        # The name of the calculation, arbitrary
+
+BETA = 10;                                # Inverse temperature
+U = 4.3;                                  # Hubbard U values
+J = 0.65;                                 # Hund's coupling J (note that U and J are in Kanamori's notation, U, U-2J, U-3J)
+DENSITY = 1;                              # Define the total d occupancy per correlated atom, in this case LaTiO3, it is d^1 -> DENSITY=1
+RHAM = ../lto_rham.py;                    # The file for the tight binding Hamiltonian obtained from DFT+MLWF
+INTEGRATE_MOD = int_donly_tilted_3bands;  # The module for k-integral, which can be different for different models
+                                          #   in this case, it is for the frontier band 3-t2g-orbital model 
+N_LAYERS = 4;                             # Corresponding to the number of times the impurity solver is run
+                                          #   depending on the problems, it can the number of layers in the heterostructure 
+                                          #   or number of correlated atoms in a unit cell
+                                          #   in this example for LaTiO3, it is the number of Ti atoms in a unit cell 
+                                          #   (recall that LTO has Pnma structure with 4ABO3 in a unit cell)
+
+DTYPE = 3bands;                           # Used extensively in "system_dependence.py", it defines which kind of correlated model
+                                          #   eg: for systems where eg bands at the Fermi level such as NiO, LaNiO3 or cuprates
+                                          #   t2g: for systems where t2g bands at the Fermi level such as LaTiO3, LaVO3...
+
+SWEEPS = 200000000;                       # Number of Monte Carlo updates
+N_TAU = 10000;                            # Number of imaginary time slices
+MAX_FREQ = 500;                           # Max value of w_n considered in k-integral
+MAX_ITER = 15;                            # Max number of DMFT iterations
+MIXING = 1;                               # Mixing values (there are some special types of mixing used if MIXING > 1, but I found it is not so useful
+                                          #   a linear mixing (MIXING in 0->1) would be good enough
+
+DATA_FILE = data.h5;                      # The HDF5 file contains all data produced by the code
+
+HARTREE_INIT = 1;                         # Trigger the Hartree calculation for initial input self energy
+                                          #   the result is averaged over all spins and orbitals to avoid bias in DMFT
+                                          #   this is useful for model with p and d orbitals (where p orbitals is uncorrelated) 
+                                          #   so as to fixed the relative positions between two bands
+NUMK = 26;                                # Number of k-points for the k-integral in one direction, thus for 3D case, it is NUMK^3
+USE_LAYER_SYMMETRY = 1;                   # To exploit the symmetry if exists between correlated atoms (GdFeO3-distorted structure) or layers in heterostructure
+                                          #   the symmetry is defined in "system_dependence.py"
+FORCE_DIAGONAL = 1;                       # This option is for obtaining the rotation basis of the octahedron 
+                                          #   to minimize off-diagonal terms of the input hybridization function for the impurity solver
+PARAMAGNET = 1;                           # Restrict to paramagnetic calculation
+
+SOLVER_TYPE = TRIQS;                      # Choose the type of solver (see file "solver_types.py" for details)
+TRIQS_ACCUMULATION = time;                # Belows are options related to the solver, here it is to tell the solver to measure Green function with imaginary time
+TRIQS_SPINFLIP = 0;                       # Enable (1) or disable (0) spin exchange and pair hopping terms in the interacting Hamiltonian

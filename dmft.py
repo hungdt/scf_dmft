@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import h5py, time, sys, os;
+import re
 import init, solver, system_dependence as system;
 
 from numpy import *;
@@ -42,6 +43,16 @@ while True:
     MaxIter = int(val_def(parms, "MAX_ITER", 20));
     if it >= MaxIter and parms['MEASURE'] < 0: break;
     it += 1; 
+    if parms['MEASURE'] > 0:
+        print 'Final loop for measuring'
+        for k, v in parms.iteritems():
+            if re.match('^FINAL_', k):
+                key_to_change = re.split('^FINAL_', k)[1]
+                parms[key_to_change] = v
+                print '  %s=%s'%(key_to_change, str(v))
+                if key_to_change == 'CUTOFF_FREQ':
+                    parms['N_CUTOFF'] = int(round((float(parms['BETA'])/pi*float(v) - 1)/2.));
+                    print '  %s=%s'%('N_CUTOFF', str(parms['N_CUTOFF']))
     time_spent = time.time();
     print "ITERATION: %d\n"%it;
 

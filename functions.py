@@ -69,6 +69,25 @@ def smooth_selfenergy(it, h5, SelfEnergy, nf):
         except: nn = None;
         se_coefs[:, :, L::N_LAYERS] = get_asymp_selfenergy(parms, nf[:, L::N_LAYERS], nn);
     log_data(h5['SolverData'], 'selfenergy_asymp_coeffs', it, se_coefs.flatten(), data_type = float);
+    if int(val_def(parms, 'USE_SELFENERGY_TAIL', 0)) > 0:
+        minorder = 0
+        se_coefs = None
+        zeros((SPINS, 2, NCOR), dtype = float)
+
+        for L in range(N_LAYERS): 
+            st='SolverData/Observables/%d/L%d'%(it, L);
+            se_tail = h5[st+'/SelfEnergyTail'][:]
+            minorder = se_tail[0, 0]
+            maxorder = se_tail[-1, 0]
+            se_tail = se_tail[1:-1]
+            if se_coefs is None: se_coefs = zeros((SPINS, maxorder-minorder+1, NCOR))
+            for n in range(len(se_tail)):
+                tail = se_tail[n].reshape(-1, 2)
+                if SPINS == 1: tail = [mean(tail, 1)]
+                for s in range(SPINS): 
+                    se_coefs[s, n, L::N_LAYERS] = tail[s]
+
+
 
     list_NCutoff = ones((SPINS, NCOR), dtype = int)*int(parms['N_CUTOFF']);
     ind = SelfEnergy.imag > 0;
@@ -109,7 +128,6 @@ def get_asymp_selfenergy(parms, nf_in, nn_in = None):
             if f1 in dmft_id and f2 in dmft_id and nn_in is not None:
                 nn[i,j] = nn[j,i] = nn_in[pos];
                 pos += 1;
-            else: nn[i,j] = nn[j,i] = nf[i]*nf[j];
         if f1 in dmft_id: nn[i,i] = nf[i];
 
     S = zeros((2, SPINS*FLAVORS)); # 2: expansion orders: (iwn)^0, (iwn)^{-1}
@@ -131,79 +149,42 @@ def get_asymp_selfenergy(parms, nf_in, nn_in = None):
     if int(parms['SPINS']) == 1: ret = array([ret[0]]);
     return ret;
 
-
-def get_asymp_selfenergy_old(parms, nf_in, nn_in = None):
-    dmft_id = system.getDMFTCorrIndex(parms, all = False);
-    FLAVORS = 2*len(dmft_id);
-
-    nf = zeros(FLAVORS);
-    nf[::2] = nf[1::2] = nf_in[0, dmft_id];
-    if int(parms['SPINS']) == 2: nf[1::2] = nf_in[1, dmft_id];
-    nn = None;
-    if nn_in is not None: 
-        nn = zeros((FLAVORS, FLAVORS));
-        pos = 0;
-        for i in range(FLAVORS):
-            for j in range(i+1):
-                if pos > len(nn_in): nn = None; break;
-                nn[i,j] = nn[j,i] = nn_in[pos]; 
-                pos += 1;
-
-    U = float(parms['U']);
-    J = float(parms['J']);
-    U1= U-2*J;
-    U2= U1-J;
-    S = zeros((2, FLAVORS));
-    for f in range(FLAVORS):
-        i = int(f / 2); s = f % 2;
-        S[0, f] = U*nf[2*i+(not s)];
-        for j in range(FLAVORS/2):
-            if j != i: S[0, f] += U1*nf[j*2+(not s)] + U2*nf[j*2+s];
-        S[1, f] = 0;
-        if nn is not None: # tedious formula, be careful of being wrong
-            tmp = U**2*nf[2*i+(not s)];
-            for j in range(FLAVORS/2): 
-                if j != i: 
-                    tmp += U1**2*nf[2*j+(not s)] + U2**2*nf[2*j+s] \
-                        +2*U*U1*nn[2*i+(not s),2*j+(not s)]+2*U*U2*nn[2*i+(not s),2*j+s]+2*U1*U2*nn[2*j+(not s),2*j+s];
-                    for j1 in range(j+1,FLAVORS/2):
-                        if j1 != i: tmp += 2*U1**2*nn[2*j+(not s),2*j1+(not s)] + 2*U2**2*nn[2*j+s,2*j1+s] \
-                                + 2*U1*U2*(nn[2*j+(not s),2*j1+s]+nn[2*j+s,2*j1+(not s)]);
-            tmp -= S[0,f]**2;
-            S[1,f] = tmp;
-
-    # for full d-bands
-    FLAVORS = 2*int(parms['FLAVORS']);
-    nf = zeros(FLAVORS);
-    nf[::2] = nf[1::2] = nf_in[0];
-    if int(parms['SPINS']) == 2: nf[1::2] = nf_in[1];
-    S1 = zeros((2, FLAVORS));
-    for f in range(FLAVORS):
-        i = int(f / 2); s = f % 2;
-        S1[0, f] = U*nf[2*i+(not s)];
-        for j in range(FLAVORS/2):
-            if j != i: S1[0, f] += U1*nf[j*2+(not s)] + U2*nf[j*2+s];
-    for n in range(len(dmft_id)): 
-        S1[1, 2*dmft_id[n]] = S[1, 2*n];
-        S1[1, 2*dmft_id[n]+1] = S[1,2*n+1];
-
-    ret = array([S1[:,::2], S1[:,1::2]]) if int(parms['SPINS']) == 2 else array([S1[:, ::2]]);
-    return ret;
-
-
-def extrapolateSelfEnergy(h5, nparms, nwn):
+def get_self_energy_hdf5(h5, nparms, nwn):
     NCOR = int(nparms['NCOR']); SPINS = int(nparms['SPINS']);
     oit = h5['iter'][0];
     oparms  = load_parms(h5, oit);
-    try: MU  = float(h5['parms/%d/MU'%(oit+1)][...]);
-    except: MU  = float(h5['parms/%d/MU'%oit][...]);
+    try: MU  = float(str(h5['parms/%d/MU'%(oit+1)][...]));
+    except: MU  = float(str(h5['parms/%d/MU'%oit][...]));
     eMU = MU - h5['StaticCoulomb/%d'%oit][:];
     ose = h5['SelfEnergy/%d'%oit][:];
     own = (2*arange(size(ose, 1))+1)*pi/float(oparms['BETA']);
     oSPINS = int(oparms['SPINS']);
     assert NCOR == int(oparms['NCOR']);
+    otail = h5['SolverData/selfenergy_asymp_coeffs'][-1, 1:].reshape(oSPINS, 2, -1);
+    return extrapolate_self_energy(own, ose, otail, nwn, SPINS)
 
-    tail = h5['SolverData/selfenergy_asymp_coeffs'][-1, 1:].reshape(oSPINS, 2, -1);
+def get_self_energy_text(se_filename, nparms, nwn):
+    NCOR = int(nparms['NCOR'])
+    SPINS = int(nparms['SPINS'])
+    se_data = genfromtxt(se_filename)
+    own = se_data[:, 0]
+    oSPINS = (size(se_data, 1)-1) / (2*NCOR)
+    ose = zeros((oSPINS, len(own), NCOR), dtype=complex)
+    otail = zeros((oSPINS, 2, NCOR))
+    for s in range(oSPINS):
+        for f in range(NCOR): 
+            # SE data: wn, f0up real, f0up imag, f0dn real, f0dn imag ...
+            se_real = se_data[:, 1 + 2*(oSPINS*f+s)+0]
+            se_imag = se_data[:, 1 + 2*(oSPINS*f+s)+1]
+            ose[s, :, f] = se_real + 1j*se_imag
+            otail[s, 0, f] = mean(se_real[-5:])
+            otail[s, 1, f] = -mean(se_imag[-5:]*own[-5])
+    print otail
+    return extrapolate_self_energy(own, ose, otail, nwn, SPINS)
+
+def extrapolate_self_energy(own, ose, tail, nwn, SPINS):
+    oSPINS = size(ose, 0)
+    NCOR = size(ose, 2)
 
     tck_real = [];
     tck_imag = [];
@@ -229,9 +210,15 @@ def extrapolateSelfEnergy(h5, nparms, nwn):
 
     ind = ret.imag > 0;
     ret[ind] = ret[ind].real;
-    if SPINS < oSPINS: ret = array([mean(ret, 0)]);
-    if SPINS > oSPINS: ret = array([ret[0], ret[0]]);
-    return ret;
+    nse = ret
+    ntail = tail
+    if SPINS < oSPINS: 
+        nse = array([mean(ret, 0)])
+        ntail = array([mean(tail, 0)])
+    elif SPINS > oSPINS: 
+        nse = array([ret[0], ret[0]])
+        ntail = r_[tail, tail]
+    return nse, ntail;
 
 
 def assign(data, N_LAYERS, s = [0, 1]): # s: spin index
@@ -289,7 +276,7 @@ def rotate_all(mat, rot_mat, need_extra = False):
     return out;
 
 
-def generate_Umatrix(U, J, FLAVORS, Utype):
+def generate_Umatrix(U, J, FLAVORS, Utype, triqs_format=False):
     Umatrix = zeros((2*FLAVORS, 2*FLAVORS));
     if Utype == 'SlaterKanamori':
         U1 = U-2*J; U2 = U1-J;
@@ -331,6 +318,7 @@ def generate_Umatrix(U, J, FLAVORS, Utype):
             [0, 1, 2, 3, 4],
             [2, 3, 1, 4, 0]
             ]);
+
         UPavarini[:, dmap[0]] = UPavarini[:, dmap[1]];
         UPavarini[dmap[0], :] = UPavarini[dmap[1], :];
         JPavarini[:, dmap[0]] = JPavarini[:, dmap[1]];
@@ -343,6 +331,15 @@ def generate_Umatrix(U, J, FLAVORS, Utype):
                 if s1 == s2: Umatrix[f1, f2] = UPavarini[a1, a2] - JPavarini[a1, a2];
                 else: Umatrix[f1, f2] = UPavarini[a1, a2];
     else: exit('Unknown interaction type');
+    
+    if triqs_format: 
+        ncor = 2*FLAVORS
+        dmap = array([
+            arange(ncor),
+            r_[arange(0, ncor, 2), arange(1, ncor, 2)]
+            ])
+        Umatrix[:, dmap[0]] = Umatrix[:, dmap[1]]
+        Umatrix[dmap[0], :] = Umatrix[dmap[1], :]
     return Umatrix;
 
 

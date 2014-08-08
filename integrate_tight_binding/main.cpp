@@ -7,13 +7,13 @@
 
 using namespace Eigen;
 
-
-PyObject* calc_Gavg(PyObject *pyw, const double &delta, const double &mu, PyObject *pySE, PyObject *pyTB, const double &Hf, PyObject *py_bp, PyObject *py_wf, const int nthreads)
-{
+PyObject* calc_Gavg(PyObject *pyw, const double &delta, const double &mu, 
+                    PyObject *pySE, PyObject *pyTB, const double &Hf, 
+                    PyObject *py_bp, PyObject *py_wf, const int nthreads) {
     try {
         if (nthreads > 0) omp_set_num_threads(nthreads);
         VectorXd xl(DIM), xh(DIM);
-        xl << 0, 0;
+        xl << -M_PI, -M_PI;
         xh << M_PI, M_PI;
         double BZ1 = (xh - xl).prod();
         MatrixXcd SE;
@@ -34,7 +34,7 @@ PyObject* calc_Gavg(PyObject *pyw, const double &delta, const double &mu, PyObje
         result.setZero();
         for (int n = 0; n < w.size(); ++n) {
             green_integrand.set_data(n);
-            tmp = md_int::integrate(xl, xh, green_integrand, bp, wf);
+            tmp = md_int::Integrate(xl, xh, green_integrand, bp, wf);
             for (int i = 0; i < MSIZE; ++i)
                 result(n, MSIZE*i + i) = tmp(i);
         }
@@ -46,11 +46,11 @@ PyObject* calc_Gavg(PyObject *pyw, const double &delta, const double &mu, PyObje
     }
 }
 
-PyObject* calc_Havg(const int &Norder, PyObject *pyTB, const double &Hf, const double &delta, PyObject *py_bp, PyObject *py_wf)
-{
+PyObject* calc_Havg(const int &Norder, PyObject *pyTB, const double &Hf, 
+                    const double &delta, PyObject *py_bp, PyObject *py_wf) {
     try {
         VectorXd xl(DIM), xh(DIM);
-        xl << 0, 0;
+        xl << -M_PI, -M_PI;
         xh << M_PI, M_PI;
         double BZ1 = (xh - xl).prod();
         MatrixXi R;
@@ -62,7 +62,7 @@ PyObject* calc_Havg(const int &Norder, PyObject *pyTB, const double &Hf, const d
         numpy::from_numpy(py_wf, wf);
 
         HIntegrand h_integrand(Norder, SlaterKosterCoeffs, Hf);
-        VectorXd result = (md_int::integrate(xl, xh, h_integrand, bp, wf)).real();
+        VectorXd result = (md_int::Integrate(xl, xh, h_integrand, bp, wf)).real();
         result /= BZ1;
         VectorXd ret(Norder*MSIZE*MSIZE);
         ret.setZero();

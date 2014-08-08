@@ -119,7 +119,9 @@ def log_density(h5, iter, parms, nf):
     reportfile = 'dmft.out';
     fileexist = os.path.isfile(reportfile);
     out = open(reportfile, 'a');
-    if not fileexist: out.write('# Iter  MU   Ntot   Ntot/site   Nd    nf\n');
+    if not fileexist: 
+        if int(val_def(parms, 'AFM', 0)) > 0: out.write('# AFM calculation\n');
+        out.write('# Iter  MU   Ntot   Ntot/site   Nd    nf\n');
     if iter == 0: out.write('\n# ID: %s\n'%parms['ID']);
     nf1 = c_[nf[:, :-1:N_LAYERS], nf[:,-1]];
     pattern = '%d   %.5f   %.2f   %.4f   %.4f   ' + len(nf1.flatten())*'  %.4f' + '\n';
@@ -141,7 +143,7 @@ def load_parms(h5, iter):
     p = dict();
     grp = h5["parms/" + str(iter)];
     for k, v in grp.iteritems():
-        p[k] = v[...];
+        p[k] = str(v[...]);
     return p;
 
 def val_def(parms, item, default):

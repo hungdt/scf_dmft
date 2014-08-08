@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import sys, os, h5py;
-import solver, hartree, rotation_matrix, system_dependence as system;
+import hartree, rotation_matrix, system_dependence as system;
 
 from numpy import *;
 from average_green import averageGreen;
@@ -48,7 +48,7 @@ def initialize(h5file, parms):
         else:
             parms1 = parms.copy();
             # not allow to change these fixed parameters
-            for s in ('DELTA', 'MU', 'U', 'J', 'UJRAT', 'BETA'):
+            for s in ('DELTA', 'U', 'J', 'UJRAT', 'BETA'):
                 if s in parms1: del parms1[s];
             parms = load_parms(h5, it+1);
             for k, v in parms1.iteritems():
@@ -66,12 +66,16 @@ def initialize(h5file, parms):
     if 'DTYPE' not in parms: parms['DTYPE'] = '';
     if 'RHAM' in parms: 
         FLAVORS = 5;   # 5 d-bands
-        HR, R = getHamiltonian(parms['RHAM'], 4);
+        HR, R = getHamiltonian(parms['RHAM'], 4); # max distance is 4
         NORB = len(HR[0]);
         if parms['DTYPE'] == '3bands': FLAVORS = 3;
     else: 
         FLAVORS = int(parms['FLAVORS']);
         NORB = int(parms['NORB']);
+
+    if int(val_def(parms, 'AFM', 0)) > 0: 
+        print 'This is AFM self consistent loop!';
+        if SPINS == 1: exit('SPINS must be 2 for AFM calculation');
 
     if int(val_def(parms, 'FORCE_DIAGONAL', 0)) > 0:
         print 'FORCE_DIAGONAL is used';
@@ -84,7 +88,7 @@ def initialize(h5file, parms):
     if 'MAX_FREQ' in parms.keys(): parms['N_MAX_FREQ'] = int(round((BETA*float(parms['MAX_FREQ'])/pi - 1)/2.));
     if 'N_CUTOFF' not in parms.keys(): 
         cutoff_factor = float(val_def(parms, 'CUTOFF_FACTOR', 7));
-        parms['N_CUTOFF'] = int(round(BETA*((float(val_def(parms,'CUTOFF_FREQ', cutoff_factor*float(parms['U'])))/pi - 1)/2.)));
+        parms['N_CUTOFF'] = int(round((BETA/pi*float(val_def(parms,'CUTOFF_FREQ', cutoff_factor*float(parms['U']))) - 1)/2.));
     parms['CUTOFF_FREQ'] = (2*int(parms['N_CUTOFF'])+1)*pi/BETA;
     parms['MAX_FREQ'] = (2*int(parms['N_MAX_FREQ'])+1)*pi/BETA;
     parms['FLAVORS']  = FLAVORS;
@@ -128,22 +132,26 @@ def initialize(h5file, parms):
         # generate initial conditions
         if 'USE_DATAFILE' in parms.keys():
             print 'Get initial data from file ' + parms['USE_DATAFILE'];
+            is_hdf5 = True
             if os.path.abspath(parms['USE_DATAFILE']) != os.path.abspath(parms['DATA_FILE']):
-                g5file = h5py.File(parms['USE_DATAFILE'], 'r');
-                g5     = g5file[val_def(parms, 'USE_DATAFILE_ID', g5file.keys()[0])];
+                try: 
+                    g5file = h5py.File(parms['USE_DATAFILE'], 'r');
+                    g5 = g5file[val_def(parms, 'USE_DATAFILE_ID', g5file.keys()[0])];
+                except: is_hdf5 = False
             else:
                 g5file = None;
                 g5     = h5file[val_def(parms, 'USE_DATAFILE_ID', h5file.keys()[0])];
-            g5it = g5['iter'][0];
-            parms['MU'] = val_def(parms, 'MU', g5['parms/%d/MU'%(g5it+1)][...]);
-            parms['DELTA'] = val_def(parms, 'DELTA', g5['parms/%d/DELTA'%(g5it+1)][...]);
-            oSPINS = int(g5['parms/%d/SPINS'%(g5it+1)][...]);
-            SelfEnergy = extrapolateSelfEnergy(g5, parms, wn);
-            se_coef = g5['SolverData/selfenergy_asymp_coeffs'][-1, 1:].reshape(oSPINS, 2, -1);
-            if oSPINS < SPINS: se_coef = r_[se_coef, se_coef];
-            elif oSPINS > SPINS: se_coef = array([mean(se_coef, 0)]);
-            if not g5file is None: g5file.close();
-            del g5file, g5;
+            if is_hdf5:
+                g5it = g5['iter'][0];
+                parms['MU'] = val_def(parms, 'MU0', str(g5['parms/%d/MU'%(g5it+1)][...]));
+                parms['DELTA'] = val_def(parms, 'DELTA', str(g5['parms/%d/DELTA'%(g5it+1)][...]));
+                SelfEnergy, se_coef = get_self_energy_hdf5(g5, parms, wn)
+                if not g5file is None: g5file.close();
+                del g5file, g5;
+            else:
+                parms['MU'] = val_def(parms, 'MU0', 0);
+                parms['DELTA'] = val_def(parms, 'DELTA', 0);
+                SelfEnergy, se_coef = get_self_energy_text(parms['USE_DATAFILE'], parms, wn)
         else:
             SelfEnergy = zeros((SPINS, int(parms["N_MAX_FREQ"]), NCOR), dtype = complex);
             if int(val_def(parms, 'HARTREE_INIT', 0)) == 1: 
@@ -151,10 +159,10 @@ def initialize(h5file, parms):
                 nf = nf[:, corr_id];
                 parms['MU'] = mu; parms['DELTA'] = delta;
             else:
-                mu    = float(val_def(parms, 'MU', 0)); # don't know which default MU is good
+                mu    = float(val_def(parms, 'MU0', 0)); # don't know which default MU is good
                 delta = float(val_def(parms, 'DELTA', 0));
                 parms['MU'] = mu; parms['DELTA'] = delta;
-                Gavg, Gavg0, delta, mu, VCoulomb = averageGreen(delta, mu, 1j*wn, SelfEnergy, parms, Nd, DENSITY, int(val_def(parms, 'NO_TUNEUP', 0)) == 0, extra);
+                Gavg, Gavg0, delta, mu, VCoulomb = averageGreen(delta, mu, 1j*wn, SelfEnergy, parms, Nd, DENSITY, False, extra);
                 nf = getDensityFromGmat(Gavg, BETA, extra);
             se_coef = zeros((SPINS, 2, NCOR), dtype = float);
             for L in range(N_LAYERS): se_coef[:, :, L::N_LAYERS] = get_asymp_selfenergy(parms, nf[:, L::N_LAYERS]);

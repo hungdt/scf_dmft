@@ -24,7 +24,7 @@ def getAvgDispersion(parms, NthOrder_in, extra):
                 tmp = mat(out[s, n, L*F:(L+1)*F, L*F:(L+1)*F]);
                 dtmp = diag(rot_mat[L]*tmp*rot_mat[L].H);
                 if linalg.norm(dtmp.imag) > 1e-10: print 'getAvgDispersion: imaginary part is rather large: %g'%linalg.norm(dtmp.imag);
-                ret[n, L*F:(L+1)*F] = dtmp; 
+                ret[n, L*F:(L+1)*F] = dtmp.real; 
         swap_vec = zeros((2, N*F), dtype = int);
         for L in range(N):
             for f in range(F): swap_vec[:,f*N+L] = array([f*N+L, L*F+f]);

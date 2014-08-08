@@ -51,7 +51,7 @@ Cf2py intent(out) fout
       ! return C = B^txAxB if direction = 0
       ! input A a symmetric matrix of size L
       complex*16 A(L,L), B(L,L), C(L,L), tmp(L,L)
-      integer L
+      integer L, direction
       character C1, C2
       complex*16 ALPHA,BETA
 

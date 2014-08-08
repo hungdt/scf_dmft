@@ -106,6 +106,34 @@ def run_solver(AvgDispersion, nf, w, it, parms, aWeiss, np = 1, VCoulomb = None)
             if MEASURE_freq:
                 Giwn = tmph5['Gw'][:, sym_L::N_LAYERS];
                 Siwn = tmph5['Sw'][:, sym_L::N_LAYERS];
+            # this is the only place for AFM
+            # only works for the 4-cell unitcell (GdFeO3 distortion)
+            # G-type AFM: 0-3 are the same, 0-1 and 0-2 are opposite in spin
+            # here I just swap values of opposite spins 
+            if int(val_def(parms, 'AFM', 0) > 0) and (L in [1,2]): 
+                print 'AFM processing on this L';
+                Ntmp = NDMFT/N_LAYERS; # correlated bands per site
+                mapid = zeros(Ntmp, dtype = int);
+                mapid[0::2] = arange(1,Ntmp,2);
+                mapid[1::2] = arange(0,Ntmp,2);
+                Gtau = Gtau[:, mapid];
+                if MEASURE_freq:
+                    Giwn = Giwn[:, mapid];
+                    Siwn = Siwn[:, mapid];
+                if 'nn' in obs:
+                    tmp = obs['nn'][:];
+                    nn = zeros((Ntmp, Ntmp), dtype = float);
+                    pos = 0;
+                    for i in range(Ntmp):
+                        for j in range(i+1):
+                            nn[i,j] = nn[j,i] = tmp[pos];
+                            pos += 1;
+                    nn = nn[mapid];
+                    nn = nn[:, mapid];
+                    tmp = array([]);
+                    for i in range(Ntmp):
+                        for j in range(i+1): tmp = r_[tmp, nn[i, j]];
+                    obs['nn'] = tmp;
 
         tmph5['Gtau'][:, L::N_LAYERS] = Gtau;
         if MEASURE_freq:

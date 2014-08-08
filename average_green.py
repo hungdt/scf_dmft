@@ -42,7 +42,7 @@ def averageGreen(delta0, mu0, w, SelfEnergy, parms, Nd, Ntot, tuneup, extra):
             Gavg_diag = array([[diag(Gavg[s, n]) for n in range(size(Gavg,1))] for s in range(SPINS)]);
             nf = getDensityFromGmat(Gavg_diag, BETA, extra);
             my_ntot = sum(nf) if SPINS == 2 else 2*sum(nf); # factor of 2 due to spin
-
+            
             print "   adjust mu: " + str(mu) + " " + str(dmu) + " " + str(my_ntot);
             if firsttime: starting_error = abs(Ntot - my_ntot)/N_LAYERS; Gavg0 = Gavg.copy(); firsttime = False;
             if Ntot < 0 or abs(Ntot - my_ntot)/N_LAYERS < tol or not tuneup: break;
@@ -62,12 +62,12 @@ def averageGreen(delta0, mu0, w, SelfEnergy, parms, Nd, Ntot, tuneup, extra):
         else: ddelta += (1. if my_nd < Nd else -1.)*delta_step;
 
     # adjusted Gavg with mu_new = mu_0 + N*dmu and delta_new = delta_0 + N*ddelta;
-    if (ddelta != 0. or dmu != 0.) and starting_error < 30*tol:
-        N = 3;
+    N = float(val_def(parms, 'TUNEUP_FACTOR', 3));
+    if N != 1. and (ddelta != 0. or dmu != 0.) and starting_error < 50*tol:
         mu = mu0 + N*dmu;
         delta = delta0 + N*ddelta;
         Gavg = integrate(w, delta, mu, SE, parms, extra, parallel = True if int(val_def(parms, 'KINT_PARALLEL', 1)) > 0 else False);
-        print 'final adjustment: mu = ', mu, ', dmu = ', N*dmu, '; delta = ', delta, ', ddelta = ', N*ddelta;
+        print 'TUNEUP_FACTOR=', N, ', final adjustment: mu = ', mu, ', dmu = ', N*dmu, '; delta = ', delta, ', ddelta = ', N*ddelta;
 
 
     Gavg = array([rotate_all(Gavg[s], rot_mat) for s in range(SPINS)]);
@@ -94,11 +94,12 @@ def integrate(w, DELTA, MU, SelfEnergy, parms, extra, parallel = False):
             'extra'    : extra
             };
 
-    if 'PBS_NODEFILE' not in os.environ or not parallel: return run_task(**data);
+    job_hostfile = 'LSB_DJOB_HOSTFILE';  # this should be changed depending on queuing system
+    if job_hostfile not in os.environ or not parallel: return run_task(**data);
 
     # prepare for spawning
     parent_hostname = gethostname().split('.')[0];
-    f = open(os.environ['PBS_NODEFILE']);
+    f = open(os.environ[job_hostfile]);
     node_list = f.read().split();
     f.close();
 
@@ -195,6 +196,7 @@ def run_child_task():
 
 # task run by both parent and children
 def run_task(w, DELTA, MU, SelfEnergy, Hf, N_LAYERS, FLAVORS, SPINS, NORB, nthreads, integrate_mod, extra):
+#    print >> sys.stderr, gethostname(), len(w);
     int_module = __import__(integrate_mod, fromlist=[]);
     nbin = len(w);
     bp, wf = extra['GaussianData'];

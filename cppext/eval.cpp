@@ -23,6 +23,7 @@ PyObject * get_raw_data(boost::python::str &path, const int &measure, PyObject *
     int N = int(sim.get_parameters()["N"]),
         FLAVORS = int(sim.get_parameters()["SPINS"])*int(sim.get_parameters()["SITES"]);
     alps::RealVectorObsevaluator n=sim.get_measurements()["n"];
+    alps::RealObsevaluator sign=sim.get_measurements()["Sign"];
     
     npy_intp dim[2] = {N+1, FLAVORS};
     PyArrayObject *Gtau = (PyArrayObject *) PyArray_SimpleNew(2, dim, NPY_DOUBLE),
@@ -46,12 +47,17 @@ PyObject * get_raw_data(boost::python::str &path, const int &measure, PyObject *
     }
 
     // measure other observables
-    PyObject *obs = Py_None;
-    Py_INCREF(Py_None);
+    PyObject *obs = PyDict_New();
+
+    npy_intp sign_size = 1;
+    PyArrayObject *sign_array = (PyArrayObject *) PyArray_SimpleNew(1, &sign_size, NPY_DOUBLE);
+    double *sign_buffer = (double *)PyArray_DATA(sign_array);
+    sign_buffer[0] = sign.mean();
+    PyDict_SetItemString(obs, "sign", PyArray_Return(sign_array));
+    Py_DECREF(sign_array);
+
     if (measure > 0) {
         int Nlist = PyList_Size(obs_str_list);
-        Py_DECREF(Py_None);
-        obs = PyDict_New();
         for (int i = 0; i < Nlist; ++i) {
             alps::RealVectorObsevaluator o = sim.get_measurements()[PyString_AsString(PyList_GetItem(obs_str_list, i))];
             npy_intp o_size = o.mean().size();

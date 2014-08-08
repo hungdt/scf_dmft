@@ -45,9 +45,8 @@ def generateGaussPoints(Nm):
 
 def averageGreen(delta0, mu0, w, SelfEnergy, parms, Nd, Ntot, tuneup, extra):
     BETA     = float(parms["BETA"]);
-    N_LAYERS = int(parms['N_LAYERS']);
-    FLAVORS  = int(parms['FLAVORS']);
-    SPINS    = int(parms['SPINS']);
+    N_LAYERS = int(parms['N_LAYERS']); FLAVORS = int(parms['FLAVORS']); SPINS = int(parms['SPINS']);
+    rot_mat = extra['rot_mat'];
     
     # calculate intersite Coulomb energy here
     Vc = zeros(N_LAYERS, dtype = 'f8');
@@ -94,6 +93,7 @@ def averageGreen(delta0, mu0, w, SelfEnergy, parms, Nd, Ntot, tuneup, extra):
         if v_nd.min() < Nd and v_nd.max() > Nd: ddelta = interp_root(v_delta, v_nd, Nd);
         else: ddelta += (1. if my_nd < Nd else -1.)*delta_step;
 
+    Gavg = array([functions.rotate_all(Gavg[s], rot_mat) for s in range(SPINS)]);
     return Gavg, delta, mu, Vc;
 
 
@@ -173,7 +173,7 @@ def HartreeRun(parms, extra):
                 for f in range(len(se_coef)): se[s, :, f*N_LAYERS+L] = se_coef[f];
         
         Gavg, delta, mu, Vc = averageGreen(delta, mu, 1j*wn, se, p, p['ND'], p['DENSITY'], p['TUNEUP'], extra);
-        Gavg  = functions.rotate_all(Gavg[0], extra['rot_mat']);
+        Gavg  = mean(Gavg, 0);
         nn = getDensity(Gavg, p);
 
         # no spin/orbital polarization, no charge order

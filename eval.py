@@ -9,12 +9,20 @@ from share_fun import *;
 from average_green import averageGreen;
 
 
-def plot_data(h5, st, iter = None, L = None, f = None, noshow = True, part = None, style = '', legend_loc = 0, is_subplot = True, all_spins = True):
+def plot_data(h5, st, iter = None, L = None, f = None, 
+        noshow = True, part = None, style = '', 
+        legend_loc = 0, is_subplot = True, 
+        all_spins = True, average_spin = False,
+        xlimit = None):
     if iter == None: iter = h5['iter'][0];
     parms = gget(h5, 'parms', iter);
     N_LAYERS = int(parms['N_LAYERS']); SPINS = int(parms['SPINS']);
     y = gget(h5, st, iter, L, f);
     is_matsubara = True;
+    if average_spin: 
+        all_spins = False
+        y = array([mean(y, 0)])
+
 
     if st == 'Gtau' or st == 'hybtau':
         x = linspace(0, 1, size(y, 1));
@@ -33,7 +41,8 @@ def plot_data(h5, st, iter = None, L = None, f = None, noshow = True, part = Non
         xlb = 'Frequencies';
         if 'CUTOFF_FREQ' not in parms: parms['CUTOFF_FREQ'] = (2*int(parms['N_CUTOFF'])+1)*pi/float(parms['BETA'])
         if 'MAX_FREQ' not in parms: parms['MAX_FREQ'] = (2*int(parms['N_MAX_FREQ'])+1)*pi/float(parms['BETA'])
-        xlimit = [0, min(float(parms['CUTOFF_FREQ'])*5/4., float(parms['MAX_FREQ']))];
+        if xlimit is None:
+            xlimit = [0, min(float(parms['CUTOFF_FREQ'])*5/4., float(parms['MAX_FREQ']))];
         if part == None:
             if is_subplot: subplot(1,2,1);
             else: figure(0);
@@ -50,7 +59,7 @@ def plot_data(h5, st, iter = None, L = None, f = None, noshow = True, part = Non
             xlim(xlimit);
             title('Imaginary part');
             xlabel(xlb); ylabel(st);
-            legend(legend_str, loc = legend_loc);
+            # legend(legend_str, loc = legend_loc);
             if not noshow: show();
             return;
         if part == 'real' or part == 0: y = y.real;

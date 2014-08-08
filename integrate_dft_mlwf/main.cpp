@@ -29,15 +29,15 @@ void convert3dArray(PyObject *pyArr, std::vector<Matrix<T, Rows, Cols> > &out)
     }
 }
 
-PyObject* calc_Gavg(PyObject *pyw, const double &delta, const double &mu, PyObject *pySE, PyObject *pyHR, PyObject *pyR, const double &Hf, PyObject *py_bp, PyObject *py_wf, const int nthreads)
+PyObject* CalculateGavg(PyObject *pyw, const double &delta, const double &mu, PyObject *pySE, PyObject *pyHR, PyObject *pyR, const double &Hf, PyObject *py_bp, PyObject *py_wf, const int nthreads)
 {
     try {
         if (nthreads > 0) omp_set_num_threads(nthreads);
-        VectorXd xl(DIM), xh(DIM);
+        VectorXd xl(kDim), xh(kDim);
         xl << -M_PI, -M_PI, -M_PI;
         xh << M_PI, M_PI, M_PI;
         double BZ1 = (xh - xl).prod();
-        std::vector<MyMatcd> HR;
+        std::vector<ComplexMatrix> HR;
         MatrixXcd SE;
         MatrixXi R;
         VectorXcd w;
@@ -52,11 +52,11 @@ PyObject* calc_Gavg(PyObject *pyw, const double &delta, const double &mu, PyObje
 
         assert(w.size() == SE.rows());
 
-        MatrixXcd result(SE.rows(), MSIZE*MSIZE);
+        MatrixXcd result(SE.rows(), kMSize*kMSize);
         GreenIntegrand green_integrand(w, mu, HR, R, SE, Hf, delta);
         for (int i = 0; i < w.size(); ++i) {
             green_integrand.set_data(i);
-            result.row(i) = md_int::integrate(xl, xh, green_integrand, bp, wf);
+            result.row(i) = md_int::Integrate(xl, xh, green_integrand, bp, wf);
         }
         result /= BZ1;
         return numpy::to_numpy(result);
@@ -66,14 +66,14 @@ PyObject* calc_Gavg(PyObject *pyw, const double &delta, const double &mu, PyObje
     }
 }
 
-PyObject* calc_Havg(const int &Norder, PyObject *pyHR, PyObject *pyR, const double &Hf, const double &delta, PyObject *py_bp, PyObject *py_wf)
+PyObject* CalculateHavg(const int &Norder, PyObject *pyHR, PyObject *pyR, const double &Hf, const double &delta, PyObject *py_bp, PyObject *py_wf)
 {
     try {
-        VectorXd xl(DIM), xh(DIM);
+        VectorXd xl(kDim), xh(kDim);
         xl << -M_PI, -M_PI, -M_PI;
         xh << M_PI, M_PI, M_PI;
         double BZ1 = (xh - xl).prod();
-        std::vector<MyMatcd> HR;
+        std::vector<ComplexMatrix> HR;
         MatrixXi R;
         VectorXd bp, wf;
 
@@ -82,8 +82,8 @@ PyObject* calc_Havg(const int &Norder, PyObject *pyHR, PyObject *pyR, const doub
         numpy::from_numpy(py_bp, bp);
         numpy::from_numpy(py_wf, wf);
 
-        HIntegrand h_integrand(Norder, HR, R, Hf, delta);
-        VectorXcd result = (md_int::integrate(xl, xh, h_integrand, bp, wf));
+        HamiltonianIntegrand h_integrand(Norder, HR, R, Hf, delta);
+        VectorXcd result = (md_int::Integrate(xl, xh, h_integrand, bp, wf));
         result /= BZ1;
         return numpy::to_numpy(result);
     } catch (const char *str) {
@@ -92,9 +92,9 @@ PyObject* calc_Havg(const int &Norder, PyObject *pyHR, PyObject *pyR, const doub
     }
 }
 
-BOOST_PYTHON_MODULE(int_donly_cubic_3bands)
+BOOST_PYTHON_MODULE(int_donly_tilted_3bands)
 {
     using namespace boost::python;
-    def("calc_Gavg", calc_Gavg);
-    def("calc_Havg", calc_Havg);
+    def("calc_Gavg", CalculateGavg);
+    def("calc_Havg", CalculateHavg);
 }

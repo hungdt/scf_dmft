@@ -24,7 +24,9 @@ def init_solver(parms, np):
     elif solver_type == 'TRIQS':
         input_args['solver_path'] = user_config.solver_triqs;
         solver = TRIQSSolver(input_args);
-
+    elif solver_type == 'TRIQSSegment':
+        input_args['solver_path'] = user_config.solver_segment_triqs;
+        solver = TRIQSSegmentSolver(input_args);
     else: print 'Solver %s unknown'%solver_type;
     return solver;
 
@@ -167,10 +169,10 @@ class HybridizationSegmentSolver:
         print cmd; 
         retval = os.system(cmd);
         gh5 = h5py.File('%s.out.h5'%self.prefix, 'r');
-        sign = gh5['/simulation/results/Sign/mean/value'][...];
+        sign = float(gh5['/simulation/results/Sign/mean/value'][...]);
         if sign < 0.99: print >> sys.stderr, 'sign = %.4f: Run QMC again for %s!'%(sign, self.prefix); retval = 1;
         for i in range(FLAVORS):
-            norder = gh5['/simulation/results/order_%d/mean/value'%i][...];
+            norder = float(gh5['/simulation/results/order_%d/mean/value'%i][...]);
             if norder > self.Norder: 
                 print sys.stderr >> "mean Norder of flavor %d > Norder = %d"%(norder, self.Norder);
                 retval = 1;
@@ -204,7 +206,7 @@ class HybridizationSegmentSolver:
         for i in range(FLAVORS):
             for j in range(i+1):
                 if i == j: tmp = nf[i];
-                else: tmp = gh5['/simulation/results/nn_%d_%d/mean/value'%(i,j)][...];
+                else: tmp = float(gh5['/simulation/results/nn_%d_%d/mean/value'%(i,j)][...]);
                 nn = r_[nn, tmp];
 
         gh5.close();
@@ -227,8 +229,10 @@ class TRIQSSolver:
         parms = in_data['parms'];
         BETA = float(parms['BETA']);
         NCOR = int(parms['FLAVORS']) / 2;
+        self.beta = BETA;
         self.Ntau = int(parms['N_TAU']) + 1;
         self.Ncor = NCOR;
+        self.measure = int(parms['MEASURE'])
 
         hyb_mat = in_data['hybmat'];
         hyb_tail = in_data['hybtail'];
@@ -245,8 +249,8 @@ class TRIQSSolver:
         # prepare parms file for CTQMC
         QMC_parms = {
                 'SWEEPS_EACH_NODE' : int(val_def(parms, 'SWEEPS', 500000))/self.args['np'],
-                'THERMALIZATION'   : val_def(parms, 'THERMALIZATION', 300),
-                'N_MEAS'           : val_def(parms, 'N_MEAS', 50),
+                'THERMALIZATION'   : val_def(parms, 'THERMALIZATION', 50000),
+                'N_MEAS'           : val_def(parms, 'N_MEAS', 100),
 
                 'BETA'             : parms['BETA'],
                 'U_MATRIX'         : prefix+'.Umatrix',
@@ -259,6 +263,7 @@ class TRIQSSolver:
                 'N_LEGENDRE'       : val_def(parms, 'TRIQS_N_LEGENDRE', 50),
                 'ACCUMULATION'     : val_def(parms, 'TRIQS_ACCUMULATION', 'legendre'),
                 'SPINFLIP'         : val_def(parms, 'TRIQS_SPINFLIP', 1),
+                'MEASURE'          : self.measure,
                 };
 
         solver_parms_file = open(prefix + '.parms', 'w');
@@ -275,17 +280,17 @@ class TRIQSSolver:
     def collect(self):
         print 'Collect data from ' + self.prefix;
         R = h5py.File(self.prefix+'.solution.h5', 'r');
-        BETA = R['G/up0/Mesh/Beta'][...];
+        BETA = self.beta;
         SPINS = 2; spins = ('up', 'dn');
         NCOR = self.Ncor;
         G = []; S = []; nf = []; Gl = [];
         is_legendre = True if 'G_Legendre' in R else False;
         for f in range(NCOR):
             for sp in spins:
-                G.append(R['G/%s%d/Data'%(sp,f)][0, 0, :, 0] + 1j*R['G/%s%d/Data'%(sp,f)][0, 0, :, 1]);
-                if is_legendre: Gl.append(R['G_Legendre/%s%d/Data'%(sp,f)][0, 0, :]);
-                S.append(R['Sigma/%s%d/Data'%(sp,f)][0, 0, :, 0] + 1j*R['Sigma/%s%d/Data'%(sp,f)][0, 0, :, 1]);
-                nf.append(R['Observables/N_%s%d'%(sp,f)][...]);
+                G.append(R['G/%s%d/data'%(sp,f)][:, 0, 0, 0] + 1j*R['G/%s%d/data'%(sp,f)][:, 0, 0, 1]);
+                if is_legendre: Gl.append(R['G_Legendre/%s%d/data'%(sp,f)][:, 0, 0]);
+                S.append(R['Sigma/%s%d/data'%(sp,f)][:, 0, 0, 0] + 1j*R['Sigma/%s%d/data'%(sp,f)][:, 0, 0, 1]);
+                nf.append(float(R['Observables/N_%s%d'%(sp,f)][...]));
         Giwn = array(G).T;
         Siwn = array(S).T;
         nf   = array(nf);
@@ -294,7 +299,7 @@ class TRIQSSolver:
         for i in range(SPINS*NCOR):
             for j in range(i+1):
                 if i == j: tmp = nf[i];
-                else: tmp = R['Observables/nn_%d_%d'%(i,j)][...];
+                else: tmp = float(R['Observables/nn_%d_%d'%(i,j)][...]);
                 nn = r_[nn, tmp];
         obs = { 'nn' : nn };
 
@@ -304,17 +309,124 @@ class TRIQSSolver:
         Gtau[-1, :] = -nf;
         Gtau[0,  :] = -(1-nf);
         
-        Stail = zeros((len(R['Sigma/up0/Tail/array'][:]), NCOR*SPINS), dtype = complex);
-        order_min = R['Sigma/up0/Tail/OrderMinMIN'][...];
-        order_max = R['Sigma/up0/Tail/OrderMaxMAX'][...];
+        order_min = int(R['Sigma/up0/singularity/omin'][...]);
+        order_max = min(R['Sigma/up0/singularity/mask'][:]);
+        Stail = zeros((order_max-order_min+1, NCOR*SPINS), dtype = complex);
         for f in range(NCOR):
             for s, sp in enumerate(spins):
-                for n in range(len(Stail)):
-                    Stail[n, 2*f+s] = R['Sigma/%s%d/Tail/array'%(sp,f)][n, 0, 0, 0] + 1j*R['Sigma/%s%d/Tail/array'%(sp,f)][n, 0, 0, 1];
+                tmp = R['Sigma/%s%d/singularity/data'%(sp,f)][:order_max-order_min+1, 0, 0];
+                Stail[:, 2*f+s] = tmp[:,0] + 1j*tmp[:,1];
         Stail = r_[order_min*ones((1, NCOR*SPINS)), Stail, order_max*ones((1, NCOR*SPINS))];
         if is_legendre: 
             GLegendre = array(Gl).T;
             obs = { 'SelfEnergyTail' : Stail, 'GLegendre' : GLegendre , 'nn' : nn };
         else: obs = { 'SelfEnergyTail' : Stail, 'nn' : nn };
+
+        if self.measure > 0:
+            if 'TimeCorrelators' in R:
+                opr_list = eval(str(R['TimeCorrelators/indices'][...]))
+                for opr_name in opr_list:
+                    obs[opr_name] = R['TimeCorrelators/%s/data'%opr_name][:]
+        R.close()
+        return Gtau, obs, Giwn, Siwn;
+
+
+class TRIQSSegmentSolver:
+    def __init__(self, input_args):
+        self.args = input_args;
+
+    def prepare(self, prefix, in_data):
+        print 'Prepare running solver for ' + prefix;
+        self.prefix = prefix;
+
+        parms = in_data['parms'];
+        BETA = float(parms['BETA']);
+        NCOR = int(parms['FLAVORS']) / 2;
+        self.beta = BETA;
+        self.Ntau = int(parms['N_TAU']) + 1;
+        self.Ncor = NCOR;
+
+        hyb_mat = in_data['hybmat'];
+        hyb_tail = in_data['hybtail'];
+        wn = (2*arange(size(hyb_mat, 0))+1)*pi/BETA;
+        savetxt(prefix+'.hybmat.real', c_[wn, hyb_mat.real]);
+        savetxt(prefix+'.hybmat.imag', c_[wn, hyb_mat.imag]);
+        savetxt(prefix+'.hybmat.tail', hyb_tail);
+        savetxt(prefix+'.MUvector', in_data['MU']);
+
+        Umatrix = generate_Umatrix(float(parms['U']), float(parms['J']), 
+                NCOR, val_def(parms, 'INTERACTION_TYPE', 'SlaterKanamori'), 
+                triqs_format=True);
+        savetxt(prefix+'.Umatrix', Umatrix);
+
+        # prepare parms file for CTQMC
+        QMC_parms = {
+                'SWEEPS_EACH_NODE' : int(val_def(parms, 'SWEEPS', 500000))/self.args['np'],
+                'THERMALIZATION'   : val_def(parms, 'THERMALIZATION', 3000),
+                'N_MEAS'           : val_def(parms, 'N_MEAS', 200),
+
+                'BETA'             : parms['BETA'],
+                'U_MATRIX'         : prefix+'.Umatrix',
+                'MU_VECTOR'        : prefix + '.MUvector',
+
+                'HYB_MAT'          : prefix + '.hybmat',
+                'NCOR'             : NCOR,
+                'HDF5_OUTPUT'      : prefix + '.solution.h5',
+
+                'N_LEGENDRE'       : val_def(parms, 'TRIQS_N_LEGENDRE', 50),
+                'ACCUMULATION'     : val_def(parms, 'TRIQS_ACCUMULATION', 'legendre'),
+                'SPINFLIP'         : val_def(parms, 'TRIQS_SPINFLIP', 1),
+                
+                'N_CUTOFF'         : parms['N_CUTOFF'],
+                };
+
+        solver_parms_file = open(prefix + '.parms', 'w');
+        for k, v in QMC_parms.iteritems(): solver_parms_file.write(k + ' = ' + str(v) + ';\n');
+
+
+    def run(self):
+        cmd = '%s -n %d %s %s.parms 1>&2'%(self.args['mpirun_path'], self.args['np'], self.args['solver_path'], self.prefix);
+        print cmd; 
+        retval = os.system(cmd);
+        return retval;
+
+
+    def collect(self):
+        print 'Collect data from ' + self.prefix;
+        R = h5py.File(self.prefix+'.solution.h5', 'r');
+        BETA = self.beta;
+        SPINS = 2; spins = ('up', 'dn');
+        NCOR = self.Ncor;
+        G = []; S = []; nf = []; Gl = [];
+        is_legendre = True if 'G_Legendre' in R else False;
+        for f in range(NCOR):
+            for sp in spins:
+                G.append(R['G/%s%d/Data'%(sp,f)][0, 0, :, 0] + 1j*R['G/%s%d/Data'%(sp,f)][0, 0, :, 1]);
+                if is_legendre: Gl.append(R['G_Legendre/%s%d/data'%(sp,f)][0, 0, :]);
+                S.append(R['Sigma/%s%d/Data'%(sp,f)][0, 0, :, 0] + 1j*R['Sigma/%s%d/Data'%(sp,f)][0, 0, :, 1]);
+                nf.append(float(R['DensityMatrix/%s%d'%(sp,f)][0, 0, 0]));
+        Giwn = array(G).T;
+        Siwn = array(S).T;
+        nf   = array(nf);
+
+        Gtau = zeros((self.Ntau, SPINS*NCOR), dtype = float);
+        for f in range(SPINS*NCOR):
+            Gtau[:, f] = cppext.IFT_mat2tau(Giwn[:, f].copy(), self.Ntau, BETA, 1.0, 0.0);
+        Gtau[-1, :] = -nf;
+        Gtau[0,  :] = -(1-nf);
+        
+        order_min = int(R['Sigma/up0/Tail/OrderMinMIN'][...])
+        order_max = int(R['Sigma/up0/Tail/OrderMaxMAX'][...])
+        Stail = zeros((order_max-order_min+1, NCOR*SPINS), dtype=float);
+        for f in range(NCOR):
+            for s, sp in enumerate(spins):
+                Stail[:, 2*f+s] = R['Sigma/%s%d/Tail/array'%(sp,f)][:, 0, 0, 0];
+        Stail = r_[order_min*ones((1, NCOR*SPINS)), Stail, 
+                   order_max*ones((1, NCOR*SPINS))];
+
+        obs = { 'SelfEnergyTail' : Stail}
+        if is_legendre: 
+            GLegendre = array(Gl).T;
+            obs['GLegendre'] = GLegendre
         return Gtau, obs, Giwn, Siwn;
 

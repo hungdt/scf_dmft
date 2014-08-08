@@ -24,6 +24,7 @@
 #define __NUMPY_EIGEN_H__
 
 #include <numpy/arrayobject.h>
+#include <vector>
 #include <Eigen/Core>
 
 namespace numpy {
@@ -187,6 +188,29 @@ PyObject* to_numpy(const array_t &arr)
         eigen_python_matrix_converter<array_t>::to_python(arr, ret);
 
     return ret;
+}
+
+template<typename T, int Rows, int Cols>
+void convert3dArray(PyObject *pyArr, std::vector<Eigen::Matrix<T, Rows, Cols> > &out) 
+{
+  import_array();
+  if (PyArray_NDIM(pyArr)!=3) throw "dim != 3";
+
+  PyArrayObject *arr = reinterpret_cast<PyArrayObject*>(pyArr);
+  npy_intp *sz = arr->dimensions;
+  npy_intp strides[3];
+  int elsize = (PyArray_DESCR(pyArr))->elsize;
+
+  for (int i = 0; i < 3; ++i)
+    strides[i] = PyArray_STRIDE(arr, i)/(PyArray_DESCR(arr))->elsize;
+  out.resize(sz[0]);
+  T *source = (T *)PyArray_DATA(arr);
+  for (int i=0; i<sz[0]; ++i) {
+    for (int r=0; r<sz[1]; r++)
+      for (int c=0; c<sz[2]; c++) {
+        out[i](r, c) = source[i*strides[0] + r*strides[1] + c*strides[2]];
+      }
+  }
 }
 
 } // end namespace numpy
