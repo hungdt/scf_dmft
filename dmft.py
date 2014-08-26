@@ -138,14 +138,14 @@ while True:
 
     # check stop condition
     # generate criterion for convergence: DOS at Fermi level
-    DOS_in  = getFermiDOS(Gavg0, float(parms['BETA']));
-    Gavg0 = averageGreen(delta_in, mu_in, 1j*wn, SelfEnergy_out, parms, Nd, DENSITY, False, extra)[1];
-    DOS_out = getFermiDOS(Gavg0, float(parms['BETA']));
-    DOS_in = c_[DOS_in[:,:NCOR:N_LAYERS], sum(DOS_in[:, NCOR:], 1)/N_LAYERS];
-    DOS_out = c_[DOS_out[:,:NCOR:N_LAYERS], sum(DOS_out[:, NCOR:], 1)/N_LAYERS];
+#    DOS_in  = getFermiDOS(Gavg0, float(parms['BETA']));
+#    Gavg0 = averageGreen(delta_in, mu_in, 1j*wn, SelfEnergy_out, parms, Nd, DENSITY, False, extra)[1];
+#    DOS_out = getFermiDOS(Gavg0, float(parms['BETA']));
+#    DOS_in = c_[DOS_in[:,:NCOR:N_LAYERS], sum(DOS_in[:, NCOR:], 1)/N_LAYERS];
+#    DOS_out = c_[DOS_out[:,:NCOR:N_LAYERS], sum(DOS_out[:, NCOR:], 1)/N_LAYERS];
     print 'End iteration %d\n\n'%it;
 
-    if check_convergence(h5, it, r_[mu_orig, delta_orig, DOS_in.flatten()], r_[mu_in, delta_in, DOS_out.flatten()], 
+    if check_convergence(h5, it, r_[mu_orig, delta_orig, SelfEnergy_in.flatten()], r_[mu_in, delta_in, SelfEnergy_out.flatten()], 
             abstol = float(val_def(parms, 'TOLERANCE', 0.001*int(parms['SPINS']))), mixing = mixer.get_mixing_value(), Ntime=3):
         print 'CONVERGE!'
         if parms['MEASURE'] == 0: parms['MEASURE'] = 1; 

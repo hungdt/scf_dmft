@@ -147,8 +147,9 @@ class HybridizationSegmentSolver:
 
                 'MEASURE_freq'            : self.MEASURE_freq,
                 'N_MATSUBARA'             : int(parms['N_CUTOFF']),
-                };
 
+                'MAX_TIME'                : val_def(parms, 'MAX_TIME', 80000),
+                };
         self.Norder = QMC_parms['N_HISTOGRAM_ORDERS'];
         solver_parms_file = open(prefix + '.parms', 'w');
         for k, v in QMC_parms.iteritems(): solver_parms_file.write(k + ' = ' + str(v) + ';\n');

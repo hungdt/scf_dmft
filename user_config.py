@@ -15,7 +15,7 @@ solver_matrix = "/home/hungdt/works/code/DMFT/Matrix/MPI_dca";
 
 # for segment solvers in ALPS code
 # the path for alpspython, usually in $ALPS_ROOT_DIR/bin
-alpspython = "/opt/alps_svn/bin/alpspython"
+alpspython = "/home/td120143/apps/alps/bin/alpspython"
 solver_segment = "sh %s %s/alps_interface.py"%(alpspython, src_dir);
 
 # for TRIQS code
