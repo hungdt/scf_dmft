@@ -4,7 +4,7 @@ BETA = 10;                                # Inverse temperature
 U = 4.3;                                  # Hubbard U values
 J = 0.65;                                 # Hund's coupling J (note that U and J are in Kanamori's notation, U, U-2J, U-3J)
 DENSITY = 1;                              # Define the total d occupancy per correlated atom, in this case LaTiO3, it is d^1 -> DENSITY=1
-RHAM = ../lto_rham.py;                    # The file for the tight binding Hamiltonian obtained from DFT+MLWF
+RHAM = lto_rham.py;                       # The file for the tight binding Hamiltonian obtained from DFT+MLWF
 INTEGRATE_MOD = int_donly_tilted_3bands;  # The module for k-integral, which can be different for different models
                                           #   in this case, it is for the frontier band 3-t2g-orbital model 
 N_LAYERS = 4;                             # Corresponding to the number of times the impurity solver is run

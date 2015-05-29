@@ -92,7 +92,7 @@ PyObject* CalculateHavg(const int &Norder, PyObject *pyHR, PyObject *pyR, const 
     }
 }
 
-BOOST_PYTHON_MODULE(int_donly_cubic_3bands)
+BOOST_PYTHON_MODULE(int_donly_tilted_3bands)
 {
     using namespace boost::python;
     def("calc_Gavg", CalculateGavg);
