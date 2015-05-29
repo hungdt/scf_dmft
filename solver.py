@@ -280,8 +280,8 @@ def solver_post_process(parms, aWeiss, h5, tmph5filename):
     for s in range(SPINS):
         for f in range(NCOR):
             if f not in dmft_id:
-                Gmat[s, :, f] = 1. / (aWeiss[s, :, f] - S0[s, f]);
                 Smat[s, :, f] = S0[s, f];
+                Gmat[s, :, f] = 1. / (aWeiss[s, :, f] - Smat[s, :, f]);
             Gtau[s, :, f] = cppext.IFT_mat2tau(Gmat[s, :, f].copy(), Ntau, float(parms['BETA']), 1.0, 0.0);
 
     Gtau[:, 0, :] = -(1.-nf);
@@ -310,13 +310,16 @@ def getSymmetricLayers(tmph5, parms):
 
 
 def get_inert_band_HF(parms, nf):
-    FLAVORS = int(parms['FLAVORS']); SPINS = 2;
+    FLAVORS = int(parms['FLAVORS'])
+    SPINS = 2
+    ret = zeros(SPINS);
+    if int(val_def(parms, 'TMP_HELD_DC' , 0)) > 0: 
+        return ret
     assert(size(nf, 1) == FLAVORS);
     dmft_id = system.getDMFTCorrIndex(parms, all = False);
     inert_id = array([s for s in range(FLAVORS) if s not in dmft_id]);
     U = float(parms['U']); J = float(parms['J']);
     if len(nf) == 1: nf = r_[nf, nf];
-    ret = zeros(SPINS);
     for s in range(SPINS):
         for f in inert_id: ret[s] += (U-2*J)*nf[not s, f] + (U-3*J)*nf[s, f];
 

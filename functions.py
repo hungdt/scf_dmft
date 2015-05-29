@@ -109,11 +109,18 @@ def get_asymp_hybmat(parms, nf, MU, Eav):
 
 
 def get_asymp_selfenergy(parms, nf_in, nn_in = None):
-    U = generate_Umatrix(float(parms['U']), float(parms['J']), 
-            int(parms['FLAVORS']), val_def(parms, 'INTERACTION_TYPE', 'SlaterKanamori'));
     dmft_id = system.getDMFTCorrIndex(parms, all = False);
     FLAVORS = int(parms['FLAVORS']);
     SPINS = 2;
+    U = generate_Umatrix(float(parms['U']), float(parms['J']), 
+            int(parms['FLAVORS']), val_def(parms, 'INTERACTION_TYPE', 'SlaterKanamori'));
+    if int(val_def(parms, 'TMP_HELD_DC' , 0)) > 0: 
+        for m in range(2*FLAVORS):
+            for n in range(2*FLAVORS):
+                f1 = m/2
+                f2 = n/2
+                if (f1 not in dmft_id) or (f2 not in dmft_id):
+                    U[m, n] = 0.
 
     nf = zeros(SPINS*FLAVORS);
     nf[::2] = nf[1::2] = nf_in[0];
@@ -145,7 +152,13 @@ def get_asymp_selfenergy(parms, nf_in, nn_in = None):
     # for mean field, there is only \Sigma^0, other terms vanish
     # so I set \Sigma^1 to be zero
     for f in range(FLAVORS):
-        if f not in dmft_id: ret[:, 1, f] = 0;
+        if f not in dmft_id: 
+            ret[:, 1, f] = 0;
+            if int(val_def(parms, 'TMP_HELD_DC' , 0)) > 0: 
+                uu = float(parms['U'])
+                jj = float(parms['J'])
+                ntot = sum(nf_in[0][dmft_id] + nf_in[1][dmft_id])
+                ret[:, 0, f] = ((uu-2*jj) + jj*(2 - (3-1)) / (2*3.-1.))*(ntot-0.5)
     if int(parms['SPINS']) == 1: ret = array([ret[0]]);
     return ret;
 

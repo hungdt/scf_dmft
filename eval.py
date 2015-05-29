@@ -90,8 +90,9 @@ def load_data(datafile, ID = None):
     return h5, h5file;
 
 
-def getRenormFactor(h5, npoint = 2, norder = 1, it = None, show_p = False):
+def getRenormFactor(h5, npoint = 2, norder = 1, it = None):
     if it == None: it = h5['iter'][0];
+    nlayers = int(gget(h5, 'parms')['N_LAYERS'])
     se = gget(h5, 'se', it)[:, :npoint, :];
     wn = gget(h5, 'wn')[:npoint];
     z = zeros((size(se, 0), size(se, 2)), dtype = 'f8');
@@ -102,11 +103,13 @@ def getRenormFactor(h5, npoint = 2, norder = 1, it = None, show_p = False):
                 p = polyfit(wn, imag(se[s, :, f]), norder);
                 z[s, f] = 1. / (1 - p[-2]);
                 imse0[s, f] = p[-1];
-                if show_p: print 'f=%d, s=%d'%(f,s), p;
+#                if f % nlayers == 0:
+#                    print 'f=%d, s=%d'%(f/nlayers,s), p;
             else: z[s, f] =  1. / (1-imag(se[s, 0, f])/wn[0]);
 #    print imse0[:, ::4];
+#    print 1./mean(z[:, ::4], 0)
 #    print mean(imse0[:, ::4], 0);
-    return z;
+    return z
 
 
 def getFermiDOS_old(h5, it = None):

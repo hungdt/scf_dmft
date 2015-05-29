@@ -7,9 +7,9 @@
 
 #include <Eigen/StdVector>
 
-const int kNLayers = 4;
+const int kNLayers = 1;
 const int kNCor  = 3;
-const int kMSize = 12;
+const int kMSize = kNLayers*kNCor;
 const int kDim   = 3;
 
 typedef std::complex<double> Complex;

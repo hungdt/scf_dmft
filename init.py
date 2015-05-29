@@ -109,7 +109,6 @@ def initialize(h5file, parms):
     corr_id = system.getCorrIndex(parms);
     NCOR = len(corr_id);
     
-    
     if not parms['ID'] in h5file.keys():
         it = 0;
     
@@ -117,18 +116,19 @@ def initialize(h5file, parms):
         h5 = h5file.create_group(parms['ID']);
         h5.create_dataset("iter", (1,), int, data = -1);
     
-        crt_tuple = ("ImpurityGreen", "avgGreen", "SelfEnergy", "WeissField", "parms", "StaticCoulomb",
-                "SolverData", "SolverData/Gtau", "SolverData/Hybmat", "SolverData/Hybtau", "SolverData/Observables");
+        crt_tuple = ("ImpurityGreen", "avgGreen", "SelfEnergy", "WeissField", 
+                     "parms", "StaticCoulomb", "SolverData", 
+                     "SolverData/Gtau", "SolverData/Hybmat", 
+                     "SolverData/Hybtau", "SolverData/Observables");
         for obj in crt_tuple: h5.create_group(obj);
     
-        parms['SPINS']    = SPINS;
-        parms['NORB']     = NORB;
-        parms['ND']       = Nd/float(N_LAYERS);
-        parms['NCOR']     = NCOR;
-        parms['N_TAU']    = val_def(parms, 'N_TAU', 400);
+        parms['SPINS'] = SPINS;
+        parms['NORB']  = NORB;
+        parms['ND']    = Nd/float(N_LAYERS);
+        parms['NCOR']  = NCOR;
+        parms['N_TAU'] = val_def(parms, 'N_TAU', 400);
         if 'UJRAT' in parms.keys(): parms['J'] = float(parms['U']) / float(parms['UJRAT']);
     
-       
         # generate initial conditions
         if 'USE_DATAFILE' in parms.keys():
             print 'Get initial data from file ' + parms['USE_DATAFILE'];

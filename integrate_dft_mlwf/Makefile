@@ -3,7 +3,7 @@ include ../Make.inc
 CXXFLAGS += -I$(PYTHON_INC) -I$(EIGEN) -I$(NUMPY) -I$(MYINC) -fPIC -fopenmp -DEIGEN_DONT_PARALLELIZE
 LIBS += $(PYTHON_LIB) -lboost_python -lgomp $(LAPACK)
 
-NAME = donly_tilted_3bands
+NAME = donly_cubic_3bands
 TARGET = int_$(NAME).so
 
 OBJECTS = main.o integrand.o

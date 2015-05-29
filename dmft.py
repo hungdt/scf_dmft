@@ -129,7 +129,13 @@ while True:
         print 'Check for updating parameters';
         updated = False;
         for k, v in parms_new.iteritems(): 
-            if k not in parms or str(parms[k]) != str(v): print k, ' = ', v; parms[k] = v; updated = True;
+            if k not in parms or str(parms[k]) != str(v): 
+                print k, ' = ', v
+                parms[k] = v
+                updated = True;
+                if k == 'MU': 
+                    mu_in = float(parms_new['MU'])
+                    print '  chemical potential is forced to be %s'%parms_new['MU']
         if not updated: print 'no new parameters.';
     save_parms(h5, it+1, parms);
 

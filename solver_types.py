@@ -52,7 +52,9 @@ class HybridizationMatrixSolver:
         if FLAVORS/2 == 1: Lattice = '"site"';
         # prepare parms file for CTQMC
         green_only = 1; self.list_obs = None;
-        if int(parms['MEASURE']) > 0: green_only = 0; self.list_obs = parms['OBSERVABLES'].split();
+        if int(parms['MEASURE']) > 0: 
+            green_only = 0
+            self.list_obs = parms['OBSERVABLES'].split(',')
         QMC_parms = {
                 'LATTICE_LIBRARY'         : user_config.LatticeLibrary,
                 'LATTICE'                 : Lattice,

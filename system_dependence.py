@@ -31,6 +31,7 @@ def getAvgDispersion(parms, NthOrder_in, extra):
         ret[:, swap_vec[0]] = ret[:, swap_vec[1]];
         rret[s] = ret;
 
+    # avg dispersion of uncorrelated orbitals (no need for matrix rotation)
     for s in range(S):
         for n in range(NthOrder):
             for f in range(N*F,NORB): rret[s, n, f] = out[s, n, f, f];
