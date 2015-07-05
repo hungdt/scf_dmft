@@ -24,9 +24,9 @@ def init_solver(parms, np):
     elif solver_type == 'TRIQS':
         input_args['solver_path'] = user_config.solver_triqs;
         solver = TRIQSSolver(input_args);
-    elif solver_type == 'TRIQSSegment':
-        input_args['solver_path'] = user_config.solver_segment_triqs;
-        solver = TRIQSSegmentSolver(input_args);
+    elif solver_type == 'TRIQSOld':
+        input_args['solver_path'] = user_config.solver_triqs_old;
+        solver = TRIQSSolverOld(input_args);
     else: print 'Solver %s unknown'%solver_type;
     return solver;
 
@@ -220,8 +220,7 @@ class HybridizationSegmentSolver:
         else: return Gtau, obs;
 
 
-
-class TRIQSSolver:
+class TRIQSSolverOld:
     def __init__(self, input_args):
         self.args = input_args;
 
@@ -334,102 +333,103 @@ class TRIQSSolver:
         return Gtau, obs, Giwn, Siwn;
 
 
-class TRIQSSegmentSolver:
+class TRIQSSolver(object):
     def __init__(self, input_args):
         self.args = input_args;
 
     def prepare(self, prefix, in_data):
-        print 'Prepare running solver for ' + prefix;
-        self.prefix = prefix;
+        print 'Prepare input for the impurity solver'
+        self.mysys = in_data['parms'];
+        self.prefix = prefix
+        self.measure = int(self.mysys['MEASURE'])
 
-        parms = in_data['parms'];
-        BETA = float(parms['BETA']);
-        NCOR = int(parms['FLAVORS']) / 2;
-        self.beta = BETA;
-        self.Ntau = int(parms['N_TAU']) + 1;
-        self.Ncor = NCOR;
+        mysys = self.mysys
+        beta = float(mysys['BETA'])
+        hyb_mat = in_data['hybmat']
+        hyb_tail = in_data['hybtail']
+        assert(int(mysys['N_MAX_FREQ']) == len(hyb_mat))
+        wn = (2*arange(int(mysys['N_MAX_FREQ']))+1)*pi/beta
+        savetxt('%s.hybmat.real'%prefix, c_[wn, hyb_mat.real]);
+        savetxt('%s.hybmat.imag'%prefix, c_[wn, hyb_mat.imag]);
+        savetxt('%s.hybmat.tail'%prefix, hyb_tail);
+        savetxt('%s.mu_eff'%prefix, in_data['MU']);
 
-        hyb_mat = in_data['hybmat'];
-        hyb_tail = in_data['hybtail'];
-        wn = (2*arange(size(hyb_mat, 0))+1)*pi/BETA;
-        savetxt(prefix+'.hybmat.real', c_[wn, hyb_mat.real]);
-        savetxt(prefix+'.hybmat.imag', c_[wn, hyb_mat.imag]);
-        savetxt(prefix+'.hybmat.tail', hyb_tail);
-        savetxt(prefix+'.MUvector', in_data['MU']);
+        # prepare parms file for TRIQS solver
+        triqs_parms = {
+                'n_cycles' : int(mysys['SWEEPS'])/self.args['np'],
+                'length_cycle' : mysys.get('N_MEAS', 100),
+                'n_warmup_cycles' : mysys.get('THERMALIZATION', 10000),
+                'max_time' : mysys.get('MAX_TIME', -1),
+                'partition_method' : mysys.get('TRIQS_PARTITION_METHOD', 
+                                               'autopartition'),
 
-        Umatrix = generate_Umatrix(float(parms['U']), float(parms['J']), 
-                NCOR, val_def(parms, 'INTERACTION_TYPE', 'SlaterKanamori'), 
-                triqs_format=True);
-        savetxt(prefix+'.Umatrix', Umatrix);
+                'U' : mysys['U'],
+                'J' : mysys['J'],
+                'INTERACTION' : mysys.get('INTERACTION', 'Kanamori'),
+                'HYB_MAT' : '%s.hybmat'%prefix,
+                'MU_VECTOR' : '%s.mu_eff'%prefix,
+                'BETA' : mysys['BETA'],
 
-        # prepare parms file for CTQMC
-        QMC_parms = {
-                'SWEEPS_EACH_NODE' : int(val_def(parms, 'SWEEPS', 500000))/self.args['np'],
-                'THERMALIZATION'   : val_def(parms, 'THERMALIZATION', 3000),
-                'N_MEAS'           : val_def(parms, 'N_MEAS', 200),
-
-                'BETA'             : parms['BETA'],
-                'U_MATRIX'         : prefix+'.Umatrix',
-                'MU_VECTOR'        : prefix + '.MUvector',
-
-                'HYB_MAT'          : prefix + '.hybmat',
-                'NCOR'             : NCOR,
-                'HDF5_OUTPUT'      : prefix + '.solution.h5',
-
-                'N_LEGENDRE'       : val_def(parms, 'TRIQS_N_LEGENDRE', 50),
-                'ACCUMULATION'     : val_def(parms, 'TRIQS_ACCUMULATION', 'legendre'),
-                'SPINFLIP'         : val_def(parms, 'TRIQS_SPINFLIP', 1),
-                
-                'N_CUTOFF'         : parms['N_CUTOFF'],
-                };
-
-        solver_parms_file = open(prefix + '.parms', 'w');
-        for k, v in QMC_parms.iteritems(): solver_parms_file.write(k + ' = ' + str(v) + ';\n');
-
+                'NFLAVORS' : int(mysys['FLAVORS'])/2,
+                'NSPINS' : 2,
+                'N_TAU' : 10001,    # n_tau actually used in TRIQS solver
+                'N_MAX_FREQ' : len(wn),
+                'HDF5_OUTPUT' : '%s.triqs.out.h5'%prefix,
+                'PREFIX' : prefix,
+                'MEASURE' : self.measure,
+                }
+        solver_parms_file = open('%s.parms'%prefix, 'w')
+        for k, v in triqs_parms.iteritems(): 
+            solver_parms_file.write(k + ' = ' + str(v) + ';\n')
 
     def run(self):
-        cmd = '%s -n %d %s %s.parms 1>&2'%(self.args['mpirun_path'], self.args['np'], self.args['solver_path'], self.prefix);
-        print cmd; 
-        retval = os.system(cmd);
-        return retval;
-
+        print 'Running the solver %s'%('and measure static observables'
+                                        if self.measure else '')
+        cmd = '%s -n %d %s %s.parms 1>&2'%(self.args['mpirun_path'],
+                                           self.args['np'],
+                                           self.args['solver_path'],
+                                           self.prefix)
+        print cmd
+        retval = os.system(cmd)
+        return retval
 
     def collect(self):
         print 'Collect data from ' + self.prefix;
-        R = h5py.File(self.prefix+'.solution.h5', 'r');
-        BETA = self.beta;
-        SPINS = 2; spins = ('up', 'dn');
-        NCOR = self.Ncor;
-        G = []; S = []; nf = []; Gl = [];
-        is_legendre = True if 'G_Legendre' in R else False;
-        for f in range(NCOR):
-            for sp in spins:
-                G.append(R['G/%s%d/Data'%(sp,f)][0, 0, :, 0] + 1j*R['G/%s%d/Data'%(sp,f)][0, 0, :, 1]);
-                if is_legendre: Gl.append(R['G_Legendre/%s%d/data'%(sp,f)][0, 0, :]);
-                S.append(R['Sigma/%s%d/Data'%(sp,f)][0, 0, :, 0] + 1j*R['Sigma/%s%d/Data'%(sp,f)][0, 0, :, 1]);
-                nf.append(float(R['DensityMatrix/%s%d'%(sp,f)][0, 0, 0]));
-        Giwn = array(G).T;
-        Siwn = array(S).T;
-        nf   = array(nf);
+        mysys = self.mysys
+        h5tmp = self.prefix+'.triqs.out.h5'
+        arch = h5py.File(h5tmp, 'r')
+        spin_names = ('up', 'dn')
+        nfreqs = int(mysys['N_MAX_FREQ'])
+        nflavors = int(mysys['FLAVORS']) / 2
+        nspins = 2
+        norbs = nflavors*nspins
+        ntau = int(mysys['N_TAU'])
+        beta = float(mysys['BETA'])
+        Giwn = zeros((nfreqs, norbs), dtype=complex)
+        Siwn = zeros((nfreqs, norbs), dtype=complex)
+        Gtau = zeros((ntau+1, norbs), dtype=float)
+        nf = zeros(norbs)
+        wn = (2*arange(nfreqs)+1)*pi/beta
+        for i in range(nflavors):
+            for s in range(nspins):
+                f = nspins*i+s
+                d = arch['Giwn/%s_%d/data'%(spin_names[s], i)][:nfreqs, 0, 0]
+                Giwn[:, f] = d[:, 0] + 1j*d[:, 1]
+                d = arch['Siwn/%s_%d/data'%(spin_names[s], i)][:nfreqs, 0, 0]
+                Siwn[:, f] = d[:, 0] + 1j*d[:, 1]
+                Gtau[:, f] = cppext.IFT_mat2tau(Giwn[:, f].copy(), ntau+1,
+                                                beta, 1.0, 0.0)
+                nf[f] = self._get_density_from_gmat(Giwn[:, f], [0, 1, 0])
+                #nf[f] = arch['Occupancy/%s_%d'%(spin_names[s], i)][...]
+        obs = {'sign' : arch['average_sign'][...]}
+        return Gtau, obs, Giwn, Siwn
 
-        Gtau = zeros((self.Ntau, SPINS*NCOR), dtype = float);
-        for f in range(SPINS*NCOR):
-            Gtau[:, f] = cppext.IFT_mat2tau(Giwn[:, f].copy(), self.Ntau, BETA, 1.0, 0.0);
-        Gtau[-1, :] = -nf;
-        Gtau[0,  :] = -(1-nf);
-        
-        order_min = int(R['Sigma/up0/Tail/OrderMinMIN'][...])
-        order_max = int(R['Sigma/up0/Tail/OrderMaxMAX'][...])
-        Stail = zeros((order_max-order_min+1, NCOR*SPINS), dtype=float);
-        for f in range(NCOR):
-            for s, sp in enumerate(spins):
-                Stail[:, 2*f+s] = R['Sigma/%s%d/Tail/array'%(sp,f)][:, 0, 0, 0];
-        Stail = r_[order_min*ones((1, NCOR*SPINS)), Stail, 
-                   order_max*ones((1, NCOR*SPINS))];
-
-        obs = { 'SelfEnergyTail' : Stail}
-        if is_legendre: 
-            GLegendre = array(Gl).T;
-            obs['GLegendre'] = GLegendre
-        return Gtau, obs, Giwn, Siwn;
-
+    def _get_density_from_gmat(self, giwn, tail):
+        beta = float(self.mysys['BETA'])
+        # nfreqs = 1.5*int(self.mysys['N_CUTOFF'])
+        nfreqs = int(self.mysys['N_MAX_FREQ'])
+        wn = (2*arange(nfreqs)+1)*pi/beta
+        C = tail
+        density = 2./beta*real(sum(giwn[:nfreqs]) \
+                  + C[2]*sum(1./wn**2)) + 0.5*C[1] - beta*C[2]/4.
+        return density

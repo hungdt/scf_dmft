@@ -1,0 +1,30 @@
+ID = u2.3j0.4b60;
+
+BETA = 60;
+U = 2.3;
+J = 0.4;
+DENSITY = 4;
+MU0 = 15.96453;
+RHAM = rham.py;
+INTEGRATE_MOD = int_donly_tilted_3bands;
+N_LAYERS = 4;
+DTYPE = 3bands;
+NO_TUNEUP = 0;
+
+SWEEPS = 200000000;
+THERMALIZATION = 150000;
+N_TAU = 500;
+MAX_FREQ = 400;
+MAX_ITER = 15;
+MIXING = 1;
+TOLERANCE = 0.001;
+
+DATA_FILE = data.h5;
+USE_DATAFILE = self_energy.in;
+
+HARTREE_INIT = 1;
+NUMK = 26;
+USE_LAYER_SYMMETRY = 1;
+PARAMAGNET = 1;
+
+SOLVER_TYPE = TRIQS;

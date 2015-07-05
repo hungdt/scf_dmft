@@ -23,5 +23,6 @@ solver_segment = "sh %s %s/alps_interface.py"%(alpspython, src_dir);
 pytriqs = "pytriqs"
 solver_triqs = "%s %s/triqs_interface.py"%(pytriqs, src_dir);
 
-# this is for the interface with the private segment solver from Michel Ferrero
-solver_segment_triqs = "pytriqs-0.8 %s/triqs_segment_interface.py"%src_dir;
+pytriqs_old = '$HOME/apps/triqs/v1.0/bin/pytriqs'
+solver_triqs_old = "%s %s/triqs_interface_old.py"%(pytriqs, src_dir);
+

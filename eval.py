@@ -312,6 +312,30 @@ def gget(data, st, iter = None, L = None, f = None):
     if st == 'Z'   : return getRenormFactor(data, npoint = 2, it = iter);
 
 
+def save_data(data, st, it = None):
+    if it == None: it = data['iter'][0]
+    parms = gget(data, 'parms', it)
+    n_cutoff = int(parms['N_CUTOFF'])
+    n_layers = int(parms['N_LAYERS'])
+    d = gget(data, st, it)
+    d = d[:, :n_cutoff, ::n_layers]
+    is_matsubara = isinstance(d.item(0), complex)
+    if is_matsubara:
+        x = gget(data, 'wn')[:size(d, 1)]
+    else:
+        beta = float(parms['BETA'])
+        x = linspace(0, beta, size(d, 1))
+    out = x
+    for f in range(size(d, 2)):
+        for s in range(size(d, 0)):
+            if is_matsubara:
+                out = c_[out, d[s, :, f].real, d[s, :, f].imag]
+            else:
+                out = c_[out, d[s, :, f]]
+    idname = parms['ID']
+    savetxt('%s.%s.i%d'%(idname, st, it), out) 
+
+
 from solver import solver_input_data;
 def solver_prepare(data, it = None, L = 0):
     if it is None: it = data['iter'][0];

@@ -38,5 +38,3 @@ FORCE_DIAGONAL = 1;                       # This option is for obtaining the rot
 PARAMAGNET = 1;                           # Restrict to paramagnetic calculation
 
 SOLVER_TYPE = TRIQS;                      # Choose the type of solver (see file "solver_types.py" for details)
-TRIQS_ACCUMULATION = time;                # Belows are options related to the solver, here it is to tell the solver to measure Green function with imaginary time
-TRIQS_SPINFLIP = 0;                       # Enable (1) or disable (0) spin exchange and pair hopping terms in the interacting Hamiltonian

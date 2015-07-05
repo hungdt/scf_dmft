@@ -62,12 +62,12 @@ def averageGreen(delta0, mu0, w, SelfEnergy, parms, Nd, Ntot, tuneup, extra):
         else: ddelta += (1. if my_nd < Nd else -1.)*delta_step;
 
     # adjusted Gavg with mu_new = mu_0 + N*dmu and delta_new = delta_0 + N*ddelta;
-    N = float(val_def(parms, 'TUNEUP_FACTOR', 3));
+    N = float(val_def(parms, 'TUNEUP_FACTOR', 1));
     if N != 1. and (ddelta != 0. or dmu != 0.) and starting_error < 50*tol:
         mu = mu0 + N*dmu;
         delta = delta0 + N*ddelta;
         Gavg = integrate(w, delta, mu, SE, parms, extra, parallel = True if int(val_def(parms, 'KINT_PARALLEL', 1)) > 0 else False);
-        print 'TUNEUP_FACTOR=', N, ', final adjustment: mu = ', mu, ', dmu = ', N*dmu, '; delta = ', delta, ', ddelta = ', N*ddelta;
+        print 'TUNEUP_FACTOR =', N, ', final adjustment: mu = ', mu, ', dmu = ', N*dmu, '; delta = ', delta, ', ddelta = ', N*ddelta;
 
 
     Gavg = array([rotate_all(Gavg[s], rot_mat) for s in range(SPINS)]);

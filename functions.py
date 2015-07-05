@@ -68,11 +68,9 @@ def smooth_selfenergy(it, h5, SelfEnergy, nf):
         try: nn = h5[st+'/nn'][:];
         except: nn = None;
         se_coefs[:, :, L::N_LAYERS] = get_asymp_selfenergy(parms, nf[:, L::N_LAYERS], nn);
-    log_data(h5['SolverData'], 'selfenergy_asymp_coeffs', it, se_coefs.flatten(), data_type = float);
     if int(val_def(parms, 'USE_SELFENERGY_TAIL', 0)) > 0:
         minorder = 0
         se_coefs = None
-        zeros((SPINS, 2, NCOR), dtype = float)
 
         for L in range(N_LAYERS): 
             st='SolverData/Observables/%d/L%d'%(it, L);
@@ -86,9 +84,19 @@ def smooth_selfenergy(it, h5, SelfEnergy, nf):
                 if SPINS == 1: tail = [mean(tail, 1)]
                 for s in range(SPINS): 
                     se_coefs[s, n, L::N_LAYERS] = tail[s]
-
-
-
+    elif int(parms.get('FIT_SELFENERGY_TAIL', 1)) > 0:
+        n_max_freq = int(parms['N_MAX_FREQ'])
+        n_cutoff = int(parms['N_CUTOFF'])
+        n_fit_stop = n_cutoff + 5
+        n_fit_start = n_cutoff - 5
+        wn = (2*arange(n_max_freq)+1)*pi/float(parms['BETA'])
+        for f in range(NCOR):
+            for s in range(SPINS):
+                x_fit = wn[n_fit_start:n_fit_stop]
+                y_fit = x_fit*SelfEnergy[s, n_fit_start:n_fit_stop, f].imag
+                p = polyfit(x_fit, y_fit, 0)
+                se_coefs[s, 1, f] = -p[0]
+    log_data(h5['SolverData'], 'selfenergy_asymp_coeffs', it, se_coefs.flatten(), data_type = float);
     list_NCutoff = ones((SPINS, NCOR), dtype = int)*int(parms['N_CUTOFF']);
     ind = SelfEnergy.imag > 0;
     SelfEnergy[ind] = real(SelfEnergy[ind]);
@@ -179,20 +187,31 @@ def get_self_energy_hdf5(h5, nparms, nwn):
 def get_self_energy_text(se_filename, nparms, nwn):
     NCOR = int(nparms['NCOR'])
     SPINS = int(nparms['SPINS'])
+    N_LAYERS = int(nparms['N_LAYERS'])
+    FLAVORS = int(nparms['FLAVORS'])
     se_data = genfromtxt(se_filename)
     own = se_data[:, 0]
     oSPINS = (size(se_data, 1)-1) / (2*NCOR)
+    short_form = False
+    if oSPINS == 0:
+        oSPINS = (size(se_data, 1)-1) / (2*FLAVORS)
+        short_form = True
     ose = zeros((oSPINS, len(own), NCOR), dtype=complex)
     otail = zeros((oSPINS, 2, NCOR))
     for s in range(oSPINS):
-        for f in range(NCOR): 
+        for f in range(FLAVORS if short_form else NCOR):
             # SE data: wn, f0up real, f0up imag, f0dn real, f0dn imag ...
             se_real = se_data[:, 1 + 2*(oSPINS*f+s)+0]
             se_imag = se_data[:, 1 + 2*(oSPINS*f+s)+1]
-            ose[s, :, f] = se_real + 1j*se_imag
-            otail[s, 0, f] = mean(se_real[-5:])
-            otail[s, 1, f] = -mean(se_imag[-5:]*own[-5])
-    print otail
+            if short_form:
+                for L in range(N_LAYERS):
+                    ose[s, :, N_LAYERS*f+L] = se_real + 1j*se_imag
+                    otail[s, 0, N_LAYERS*f+L] = mean(se_real[-5:])
+                    otail[s, 1, N_LAYERS*f+L] = -mean(se_imag[-5:]*own[-5])
+            else:
+                ose[s, :, f] = se_real + 1j*se_imag
+                otail[s, 0, f] = mean(se_real[-5:])
+                otail[s, 1, f] = -mean(se_imag[-5:]*own[-5])
     return extrapolate_self_energy(own, ose, otail, nwn, SPINS)
 
 def extrapolate_self_energy(own, ose, tail, nwn, SPINS):

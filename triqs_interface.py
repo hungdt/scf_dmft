@@ -1,153 +1,139 @@
+import pytriqs.operators as triqs_ops
+import pytriqs.operators.util as triqs_ops_util
+import pytriqs.applications.impurity_solvers.cthyb as triqs_solver
+import pytriqs.gf.local as triqs_gf
+
 from pytriqs.archive import HDFArchive
-from pytriqs.gf.local import *
-from pytriqs.operators import *
-from pytriqs.applications.impurity_solvers.cthyb_matrix import Solver
 import pytriqs.utility.mpi as mpi
 
-import sys, os, time
-from share_fun import val_def, readParameters;
-from numpy import *;
+import os
+import sys
+import time
+from numpy import *
+
+from share_fun import readParameters
 
 
-#
-# Interface for TRIQS solver
-# Caution: works for diagonal Weiss field only
-#
+def load_parms_from_file(filename):
+    parms = readParameters(filename)
+    for s in ('NSPINS', 'NFLAVORS', 'N_CUTOFF', 'N_MAX_FREQ', 'N_TAU',
+              'MEASURE',
+              'n_cycles', 'length_cycle', 'n_warmup_cycles', 'max_time'):
+        if s in parms: parms[s] = int(parms[s])
+    for s in ('BETA', 'U', 'J'):
+        if s in parms: parms[s] = float(parms[s])
+    return parms
 
 
-# input data
-parms = readParameters(sys.argv[1]);
-NCOR = int(parms['NCOR']); 
-SPINS = 2; spins = ('up', 'dn');
-BETA = float(parms['BETA']);
-hyb_mat = genfromtxt(parms['HYB_MAT']+'.real')[:,1:] + 1j*genfromtxt(parms['HYB_MAT']+'.imag')[:,1:];
-hyb_coefs = genfromtxt(parms['HYB_MAT']+'.tail');
-MUvector = genfromtxt(parms['MU_VECTOR']); 
-
-solver_parms = {
-        'n_cycles'        : int(parms['SWEEPS_EACH_NODE']),
-        'length_cycle'    : int(parms['N_MEAS']),
-        'n_warmup_cycles' : int(parms['THERMALIZATION']),
-        'random_seed'     : int(1e6*time.time()*(mpi.rank+1) % 1e6)
-        };
-
-
-# prepare Green function structure, local H and quantum numbers
-# Slater-Kanamori style
-Umat = genfromtxt(parms['U_MATRIX']); 
-GFstruct = [ ('%s%d'%(s,f), [0]) for f in range(NCOR) for s in spins ];
-H_Local = None;
-for n in range(SPINS*NCOR):
-    s = n % SPINS; f = n / SPINS;
-    for n1 in range(n+1, SPINS*NCOR):
-        s1 = n1 % SPINS; f1 = n1 / SPINS;
-        tmp = Umat[n, n1] * N('%s%d'%(spins[s],f),0) * N('%s%d'%(spins[s1],f1), 0);
-        if H_Local is None: H_Local = tmp;
-        else: H_Local += tmp;
+def assign_weiss_field(G0, parms, nspins, spin_names, nflavors, flavor_names):
+    hyb_mat_prefix = parms.get('HYB_MAT', '%s.hybmat'%parms['PREFIX'])
+    hyb_mat = genfromtxt('%s.real'%hyb_mat_prefix)[:,1:]\
+              + 1j*genfromtxt('%s.imag'%hyb_mat_prefix)[:,1:]
+    hyb_tail = genfromtxt('%s.tail'%hyb_mat_prefix)
+    mu_vec = genfromtxt(parms.get('MU_VECTOR', '%s.mu_eff'%parms['PREFIX'])) 
+    for s in range(nspins):
+        for f in range(nflavors):
+            hyb_w = triqs_gf.GfImFreq(indices=[0], beta=parms['BETA'], 
+                                      n_points=parms['N_MAX_FREQ'])
+            hyb_w.data[:, 0, 0] = hyb_mat[:, nspins*f+s] 
+            for n in range(len(hyb_tail)):
+                hyb_w.tail[n+1][0, 0] = hyb_tail[n, nspins*f+s]
+            block, i = mkind(spin_names[s], flavor_names[f])
+            G0[block][i, i] << triqs_gf.inverse(triqs_gf.iOmega_n\
+                                                +mu_vec[nspins*f+s]-hyb_w)
 
 
-# exchange and pair hopping terms
-if int(parms['SPINFLIP']) > 0:
-    Jmat = Umat[::2,1::2] - Umat[::2,::2];
-    for f1 in range(NCOR):
-        for f2 in range(NCOR):
-            if f1 == f2: continue;
-            u1 = '%s%d'%(spins[0],f1);
-            u2 = '%s%d'%(spins[0],f2);
-            d1 = '%s%d'%(spins[1],f1);
-            d2 = '%s%d'%(spins[1],f2);
-            H_Local += Jmat[f1,f2]*Cdag(u1,0)*C(u2,0)*Cdag(d2,0)*C(d1,0) + Jmat[f1,f2]*Cdag(u1,0)*C(u2,0)*Cdag(d1,0)*C(d2,0);
-    Ntot = sum( [ N('%s%d'%(s,f),0) for s in spins for f in range(NCOR) ]);
-    Sz   = sum( [ N('%s%d'%(spins[0],f),0) - N('%s%d'%(spins[1],f),0) for f in range(NCOR) ]);
-    Quantum_Numbers = { 'Ntot' : Ntot, 'Sztot' : Sz };
-    for f in range(NCOR):
-        Quantum_Numbers['Sz2_%d'%f] = N('%s%d'%(spins[0],f),0) + N('%s%d'%(spins[1],f),0) - 2*N('%s%d'%(spins[0],f),0)*N('%s%d'%(spins[1],f),0)
-else:
-    Quantum_Numbers = {};
-    for sp in spins:
-        for f in range(NCOR): Quantum_Numbers['N%s%d'%(sp,f)] = N('%s%d'%(sp,f),0);
-solver_parms['quantum_numbers'] = Quantum_Numbers;
-solver_parms['use_segment_picture'] = int(parms['SPINFLIP']) == 0;
-solver_parms['H_local'] = H_Local;
+def get_interaction_hamiltonian(parms, spin_names, flavor_names, is_kanamori):
+    U_int = parms['U']
+    J_hund = parms['J']
+    if is_kanamori:
+        U, Uprime = triqs_ops_util.U_matrix_kanamori(parms['NFLAVORS'],
+                                                     U_int, J_hund)
+        ham = triqs_ops_util.h_int_kanamori(spin_names, flavor_names,
+                                            U, Uprime, J_hund, off_diag=False)
+    else: # Slater-type interaction
+        l_number = (parms['NFLAVORS']-1)/2
+        U = triqs_ops_util.U_matrix(l=lnumber, U_int=U_int, J_hund=J_hund,
+                                    basis='cubic')
+        ham = triqs_ops_util.h_int_slater(spin_names, flavor_names,
+                                          U, off_diag=False)
+    return ham
 
 
-# create a solver object
-solver = Solver(beta = BETA, gf_struct = GFstruct, n_w = int(val_def(parms, 'N_MATSUBARA', len(hyb_mat))));
+def get_quantum_numbers(parms, spin_names, flavor_names, is_kanamori):
+    qn = []
+    for s in spin_names:
+        tmp = triqs_ops.Operator()
+        for o in flavor_names:
+            tmp += triqs_ops.n(*mkind(s, o))
+        qn.append(tmp)
+    if is_kanamori:
+        for o in flavor_names:
+            dn = triqs_ops.n(*mkind(spin_names[0], o))\
+                 - triqs_ops.n(*mkind(spin_names[1],o))
+            qn.append(dn*dn)
+    return qn
 
 
-# Legendre or Time accumulation
-accumulation = val_def(parms, 'ACCUMULATION', 'time');
-if accumulation not in ['time', 'legendre']: exit('ACCUMULATION should be either "time" or "legendre"');
-if accumulation == 'time': 
-    solver_parms['time_accumulation'] = True;
-    solver_parms['legendre_accumulation'] = False;
-    solver_parms['fit_start'] = len(hyb_mat)-10;
-    solver_parms['fit_stop']  = len(hyb_mat)-1;  # I don't want to use the fitTails()
-elif accumulation == 'legendre':
-    solver_parms['legendre_accumulation'] = True;
-    solver_parms['n_legendre'] = int(val_def(parms, 'N_LEGENDRE', 50));
+if __name__ == '__main__':
+    mkind = triqs_ops_util.get_mkind(off_diag=False,
+                                     map_operator_structure=None)
+    parms = load_parms_from_file(sys.argv[1])
+    if parms['INTERACTION'].upper() not in ('SLATER', 'KANAMORI'):
+        raise ValueError('Key INTERACTION must be either "Slater" or "Kanamori"')
+    is_kanamori = True if parms['INTERACTION'].upper() == 'KANAMORI'\
+                  else False
+    assert parms['NSPINS'] == 2
+    nspins = parms['NSPINS']
+    spin_names = ('up', 'dn')
+    nflavors = parms['NFLAVORS']
+    flavor_names = [str(i) for i in range(nflavors)]
+    gf_struct = triqs_ops_util.set_operator_structure(spin_names, flavor_names,
+                                                      off_diag=False)
 
+    solver = triqs_solver.Solver(beta=parms['BETA'], gf_struct=gf_struct,
+                                 n_tau=parms['N_TAU'], n_iw=parms['N_MAX_FREQ'])
+    solver_parms = {}
+    for s in parms:
+        if s.lower() == s: solver_parms[s] = parms[s]
+    assign_weiss_field(solver.G0_iw, parms, nspins, spin_names, 
+                       nflavors, flavor_names)
+    ham_int = get_interaction_hamiltonian(parms, spin_names, flavor_names,
+                                          is_kanamori)
+    if solver_parms['partition_method'] == 'quantum_numbers':
+        solver_parms['quantum_numbers'] = get_quantum_numbers(parms, 
+                                            spin_names, flavor_names, 
+                                            is_kanamori)
 
-# prepare input G0 from hybridization \Gamma
-if len(MUvector) == 1: MUvector = MUvector[0]*ones(SPINS*NCOR);
-assert len(MUvector) == SPINS*NCOR, 'Length of MUvector must be equal to #FLAVORS';
-Delta = BlockGf(name_block_generator = solver.G0, make_copies = True, name = "Delta");
-for s, sp in enumerate(spins):
-    for f in range(NCOR):
-        name = '%s%d'%(sp,f);
-        Delta[name].data[:, 0, 0] = hyb_mat[:, 2*f+s];
-        for n in range(size(hyb_coefs, 0)): 
-            Delta[name].tail[n+1][0, 0] = hyb_coefs[n, 2*f+s];
-        MU = MUvector[2*f+s];
-        solver.G0[name] <<= inverse(iOmega_n + MU - Delta[name]);
+    solver_parms.update({
+        'h_int' : ham_int,
+        'random_seed' : int(1e6*time.time()*(mpi.rank+1) % 1e6),
+        'use_trace_estimator' : False,
+        'measure_g_tau' : True,
+        'measure_g_l' : False,
+        'performance_analysis' : False,
+        'perform_tail_fit' : False,
+        'perform_post_proc' : True,
+        'move_shift' : True,
+        'move_double' : False,
+        })
 
+    # run the solver
+    solver.solve(**solver_parms)
 
-# operators for measurement
-Measured_Operators = {};
-for sp in spins:
-    for f in range(NCOR): 
-        Measured_Operators['N_%s%d'%(sp,f)] = N('%s%d'%(sp,f), 0);
-for n1 in range(SPINS*NCOR):
-    for n2 in range(n1+1, SPINS*NCOR):
-        f1 = n1 / SPINS; sp1 = spins[n1 % SPINS];
-        f2 = n2 / SPINS; sp2 = spins[n2 % SPINS];
-        Measured_Operators['nn_%d_%d'%(n2,n1)] = N('%s%d'%(sp1, f1), 0) * N('%s%d'%(sp2, f2), 0);
-solver_parms['measured_operators'] = Measured_Operators;
+    # save data
+    if mpi.is_master_node():
+        h5file = HDFArchive(parms.get('HDF5_OUTPUT', 
+                                      '%s.triqs.out.h5'%parms['PREFIX']), 'w')
+        h5file['Gtau'] = solver.G_tau
+        h5file['Giwn'] = solver.G_iw
+        h5file['Siwn'] = solver.Sigma_iw
+        h5file['Occupancy'] = solver.G_iw.density()
+        h5file['G0iwn'] = solver.G0_iw
+        h5file['average_sign'] = solver.average_sign
 
-solver_parms['measured_time_correlators'] = {}
-if int(val_def(parms, 'MEASURE', 0)) > 0:
-    if 'Sztot' in Quantum_Numbers:
-        solver_parms['measured_time_correlators'] = {
-                'Sztot' : [ Quantum_Numbers['Sztot'], 300 ]
-                }
-
-
-# run solver
-solver.solve(**solver_parms);
-
-
-# save data
-NfileMax = 100;
-if mpi.is_master_node():
-    R = HDFArchive(parms['HDF5_OUTPUT'], 'w');
-    if accumulation == 'legendre':
-        for s, gl in solver.G_legendre: solver.G[s] <<= LegendreToMatsubara(gl);
-        R['G_Legendre'] = solver.G_legendre;
-        Gl_out = None;
-        for f in range(NCOR):
-            for sp in spins:
-                tmp = solver.G_legendre['%s%d'%(sp, f)]._data.array[0, 0, :];
-                Gl_out = tmp if Gl_out is None else c_[Gl_out, tmp];
-        for n in range(1,NfileMax):
-            filename = 'Green_Legendre.%03d'%n;
-            if not os.path.isfile(filename): break;
-        savetxt(filename, c_[arange(len(Gl_out)), Gl_out]);
-
-    solver.Sigma <<= solver.G0_inv - inverse(solver.G);
-    R['G'] = solver.G;
-    R['Sigma'] = solver.Sigma;
-    R['Observables'] = solver.measured_operators_results;
-    if len(solver_parms['measured_time_correlators']) > 0:
-        R['TimeCorrelators'] = solver.measured_time_correlators_results
-
-
+        r = solver.eigensystems
+        eigvals = []
+        for rr in r:
+            eigvals = r_[eigvals, rr[0]]
+        savetxt('%s.eigvals'%parms['PREFIX'], sort(eigvals))
