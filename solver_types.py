@@ -9,8 +9,8 @@ def init_solver(parms, np):
     solver_type = parms['SOLVER_TYPE'];
     print '%s solver is used...'%solver_type;
     input_args = {
-            'solver_path' : val_def(parms, 'SOLVER_EXE_PATH', user_config.solver_matrix),
-            'mpirun_path' : val_def(parms, 'SOLVER_MPIRUN_PATH', user_config.mpirun),
+            'solver_path' : parms.get('SOLVER_EXE_PATH', ''),
+            'mpirun_path' : parms.get('SOLVER_MPIRUN_PATH', user_config.mpirun),
             'np'          : np
             }
 

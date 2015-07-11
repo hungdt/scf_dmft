@@ -125,7 +125,8 @@ def HartreeRun(parms, extra):
         'MAX_ITER' : 15,
         'ALPHA'  : 0.5, # pay attention at this parm sometimes
         'DTYPE'  : parms['DTYPE'],
-        'INTEGRATE_MOD' : val_def(parms, 'INTEGRATE_MOD', 'integrate')
+        'INTEGRATE_MOD' : val_def(parms, 'INTEGRATE_MOD', 'integrate'),
+        'np' : parms['np']
         });
     
     for k, v in p.iteritems(): print k + ': ', v;
@@ -215,7 +216,11 @@ def HartreeRun(parms, extra):
     Gr = average_green.averageGreen(delta, mu, w, se, p,p['ND'], p['DENSITY'], 0, extra)[1][0];
     savetxt(parms['ID']+'.dos', c_[w.real, -1/pi*Gr.imag], fmt = '%.6f');
 
-    print 'End Hartree approx.:%d   Ntot=%.2f  Nd=%.2f  Delta=%.4f   Delta_eff=%.4f'%(count, 2*sum(nn)/N_LAYERS, 2*sum(nn[:N_LAYERS*FLAVORS]/N_LAYERS), delta, delta-mean(se_coef[:, corr1])), ': \n', \
-            nn[:N_LAYERS*FLAVORS].reshape(-1, N_LAYERS), '\n\n';
+    print ('End Hartree approx.:%d   Ntot=%.2f  Nd=%.2f  Delta=%.4f   '
+           'Delta_eff=%.4f')%(count, 2*sum(nn)/N_LAYERS,
+                              2*sum(nn[:N_LAYERS*FLAVORS]/N_LAYERS),
+                              delta, delta-mean(se_coef[corr1])), ': \n', \
+                              nn[:N_LAYERS*FLAVORS].reshape(-1, N_LAYERS),\
+                              '\n\n'
 #    os.system('rm ' + p['OUTPUT']+'.nn');
     return delta, mu, array([nn for s in range(int(parms['SPINS']))]), Vc;

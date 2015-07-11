@@ -22,7 +22,7 @@ emin = -1.5
 emax = 1.5
 broadening = 0.02
 magnetic_field = 0.
-nthreads = 8
+nthreads = 10
 
 rham_file = "LaTiO3_tilted_t2g_only/lto_rham.py"  # the file for the Hamiltonian produced by DFT+MLWF
 
@@ -55,5 +55,5 @@ for s in range(SPINS):
 Gavg = array([rotate_all(Gavg[s], rot_mat, need_extra = True) for s in range(SPINS)])
 
 dos = -1/pi*Gavg[0].imag 
-savetxt('dos_dft_mlwf.out', c_[w, dos], fmt='%.6f')
+savetxt('dos_dft_mlwf.openmp', c_[w, dos], fmt='%.6f')
 

@@ -44,6 +44,7 @@ def getOptions(argv):
             parms[k] = v;
     parms['DATA_FILE'] = DATA_FILE;
     parms['ID'] = str(ID);
+    parms['np'] = np
 
     if ID is None:
         print "Please give me the ID!"
