@@ -372,7 +372,7 @@ class TRIQSSolver(object):
 
                 'NFLAVORS' : int(mysys['FLAVORS'])/2,
                 'NSPINS' : 2,
-                'N_TAU' : 10001,    # n_tau actually used in TRIQS solver
+                'N_TAU' : max(10001, 2*len(wn)),
                 'N_MAX_FREQ' : len(wn),
                 'HDF5_OUTPUT' : '%s.triqs.out.h5'%prefix,
                 'PREFIX' : prefix,
