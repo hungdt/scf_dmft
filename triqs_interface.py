@@ -1,6 +1,6 @@
 import pytriqs.operators as triqs_ops
 import pytriqs.operators.util as triqs_ops_util
-import pytriqs.applications.impurity_solvers.cthyb as triqs_solver
+import pytriqs.applications.impurity_solvers.cthyb_mod as triqs_solver
 import pytriqs.gf.local as triqs_gf
 
 from pytriqs.archive import HDFArchive
@@ -75,6 +75,19 @@ def get_quantum_numbers(parms, spin_names, flavor_names, is_kanamori):
     return qn
 
 
+def get_static_observables(parms, spin_names, flavor_names):
+    ret = {
+            'N' : triqs_ops.Operator(),
+            'Sz' : triqs_ops.Operator(),
+            }
+    for sn, s in enumerate(spin_names):
+        for o in flavor_names:
+            sp = mkind(s, o)
+            ret['N'] += triqs_ops.n(*sp)
+            ret['Sz'] += (-1)**sn * triqs_ops.n(*sp)
+    return ret
+
+
 if __name__ == '__main__':
     mkind = triqs_ops_util.get_mkind(off_diag=False,
                                      map_operator_structure=None)
@@ -117,6 +130,9 @@ if __name__ == '__main__':
         'move_shift' : True,
         'move_double' : False,
         })
+    if parms.get('MEASURE', 0) > 0:
+        solver_parms['static_observables'] = get_static_observables(parms,
+                                                    spin_names, flavor_names)
 
     # run the solver
     solver.solve(**solver_parms)
@@ -131,6 +147,8 @@ if __name__ == '__main__':
         h5file['Occupancy'] = solver.G_iw.density()
         h5file['G0iwn'] = solver.G0_iw
         h5file['average_sign'] = solver.average_sign
+        if len(solver.static_observables) > 0:
+            h5file['Observables'] = solver.static_observables
 
         r = solver.eigensystems
         eigvals = []

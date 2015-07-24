@@ -422,6 +422,8 @@ class TRIQSSolver(object):
                 nf[f] = self._get_density_from_gmat(Giwn[:, f], [0, 1, 0])
                 #nf[f] = arch['Occupancy/%s_%d'%(spin_names[s], i)][...]
         obs = {'sign' : arch['average_sign'][...]}
+        if 'Observables' in arch:
+            for k, v in arch['Observables'].iteritems(): obs[k] = v
         return Gtau, obs, Giwn, Siwn
 
     def _get_density_from_gmat(self, giwn, tail):
